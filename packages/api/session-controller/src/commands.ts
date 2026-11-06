@@ -151,6 +151,7 @@ export class SessionCommandController {
     return this.agents.serializeImageAdmission(agent, async () => {
       try {
         await this.requireModel(request)
+        await this.requireToolContract(request)
         const selected: AgentModelSelection = {
           provider: request.provider,
           model: request.model,
@@ -355,6 +356,53 @@ export class SessionCommandController {
       throw new RemoteError('session/model-unavailable', 'Select an available model before sending a message.',
         { provider: selection.provider, model: selection.model })
     }
+  }
+
+  /**
+   * Refuse a tool-less model switch that would flatten recorded tool work,
+   * unless the caller has already accepted that downgrade.
+   * @param request - Session identity, requested model, and the caller's acceptance.
+   */
+  private async requireToolContract(request: SessionSelectModelRequest): Promise<void> {
+    if (request.acceptToolContract === true) return
+    const info = await this.ctx.llm.resolveModelInfo(request.provider, request.model)
+    if (info.supportsTools !== false) return
+    const toolCalls = await this.recordedToolCalls(request.sessionId)
+    if (toolCalls === 0) return
+    throw new RemoteError(
+      'session/tool-contract-confirmation-required',
+      `model "${request.model}" cannot call tools, and this Session already recorded`
+        + ` ${String(toolCalls)} tool call(s) that the downgrade replays as plain text`,
+      { provider: request.provider, model: request.model, toolCalls },
+    )
+  }
+
+  /**
+   * Count the tool calls one Session has already committed.
+   *
+   * A switch is a user gesture, so scanning committed events here costs
+   * nothing on the step hot path. An unreadable history answers 0 rather than
+   * blocking the switch: the confirmation protects against surprise loss, not
+   * against a Session whose log cannot be opened.
+   * @param sessionId - the Session being switched.
+   * @returns the number of recorded `tool/call` events.
+   */
+  private async recordedToolCalls(sessionId: SessionId): Promise<number> {
+    let observed: SessionObservation
+    try {
+      observed = await this.ctx.sessionQuery.observeSession(sessionId)
+    } catch (error) {
+      this.ctx.logger.warn(
+        `session-controller: could not read the tool history of "${sessionId}": ${String(error)}`,
+      )
+      return 0
+    }
+    using source = observed
+    let calls = 0
+    for (const event of source.events) {
+      if (event.type === 'tool/call') calls += 1
+    }
+    return calls
   }
 
   /**

@@ -76,4 +76,11 @@ export interface ModelSelectInjected {
    * @returns the Host outcome, or undefined when this Session cannot select a model.
    */
   select: (selection: ModelSelection) => Promise<RemoteResult<void> | undefined>
+  /**
+   * Accept the pending tool-contract downgrade and retry the switch.
+   * @returns the Host outcome, or undefined when this Session cannot select a model.
+   */
+  acceptToolContract: () => Promise<RemoteResult<void> | undefined>
+  /** Drop the pending downgrade confirmation, keeping the current model. */
+  dismissConfirmation: () => void
 }

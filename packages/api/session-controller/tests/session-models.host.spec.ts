@@ -13,7 +13,7 @@ import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import AttachmentStore from '@deepseek-ai/dsh-attachment'
-import LlmRuntime, { LlmAdapter, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { LlmAdapter, ReasoningEffortId, ToolCallId } from '@deepseek-ai/dsh-llm'
 import type {
   GenerateOptions, LlmCallConfigAdapterDefaults, LlmModelInfo,
   LlmModelReasoningInfo, LlmProviderInfo, LlmResolvedModelInfo, StreamChunk,
@@ -47,6 +47,8 @@ class CatalogAdapter extends LlmAdapter {
     private readonly models: readonly LlmModelInfo[] | Error,
     private readonly reasoning?: LlmModelReasoningInfo,
     private readonly exactError?: Error,
+    /** Exact-route capability answer; omitted keeps the capable default. */
+    private readonly supportsTools?: boolean,
   ) {
     super()
   }
@@ -68,6 +70,7 @@ class CatalogAdapter extends LlmAdapter {
       id: model,
       name: model,
       ...this.reasoning === undefined ? {} : { reasoning: this.reasoning },
+      ...this.supportsTools === undefined ? {} : { supportsTools: this.supportsTools },
     })
   }
 
@@ -433,6 +436,7 @@ describe('Web session model selection', () => {
     ctx.llm.registerAdapter(['plain'], new CatalogAdapter('Plain', [
       { provider: 'plain', id: 'plain-model', name: 'Plain Model' },
       { provider: 'plain', id: 'badged-model', name: 'Badged Model', badge: { text: { en: 'New', zh: '新' }, tone: 'info' } },
+      { provider: 'plain', id: 'chat-only', name: 'Chat Only', supportsTools: false },
     ]))
     ctx.llm.registerAdapter(['described-reasoning'], new CatalogAdapter('Described Reasoning', [
       { provider: 'described-reasoning', id: 'reasoning-model', name: 'Reasoning Model' },
@@ -455,6 +459,7 @@ describe('Web session model selection', () => {
       { id: 'plain', name: 'Plain', models: [
         { id: 'plain-model', name: 'Plain Model' },
         { id: 'badged-model', name: 'Badged Model', badge: { text: { en: 'New', zh: '新' }, tone: 'info' } },
+        { id: 'chat-only', name: 'Chat Only', supportsTools: false },
       ] },
       {
         id: 'described-reasoning',
@@ -471,6 +476,58 @@ describe('Web session model selection', () => {
     expect(catalog.failures).toContainEqual({
       id: 'string-failure', name: 'String Failure', message: 'string catalog failure',
     })
+    await ctx.fiber.dispose()
+  })
+
+  it('admits a chat-only model on a session that never ran a tool', async () => {
+    const { ctx, sessionId } = await harness()
+    const remote = await createSessionTestRemote(ctx, {
+      defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-chat' }),
+      cwd: '/tmp',
+    })
+    ctx.llm.registerAdapter(['chat-only'], new CatalogAdapter('Chat Only', [
+      { provider: 'chat-only', id: 'chat-only', name: 'Chat Only', supportsTools: false },
+    ], undefined, undefined, false))
+
+    // Nothing exists to flatten, so the downgrade asks for nothing.
+    const selected = expectValue(await remote.selectModel(request({
+      sessionId, provider: 'chat-only', model: 'chat-only',
+    })))
+    expect(selected.selected).toEqual({ provider: 'chat-only', model: 'chat-only' })
+    await ctx.fiber.dispose()
+  })
+
+  it('requires an explicit acceptance before a chat-only model flattens recorded tool work', async () => {
+    const { ctx, agent, sessionId } = await harness()
+    const remote = await createSessionTestRemote(ctx, {
+      defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-chat' }),
+      cwd: '/tmp',
+    })
+    ctx.llm.registerAdapter(['chat-only'], new CatalogAdapter('Chat Only', [
+      { provider: 'chat-only', id: 'chat-only', name: 'Chat Only', supportsTools: false },
+    ], undefined, undefined, false))
+    agent.session.append('tool/call', {
+      turn: 1, step: 1, callId: ToolCallId('call-1'), name: 'bash', arguments: '{}',
+    })
+
+    const refused = await remote.selectModel(request({
+      sessionId, provider: 'chat-only', model: 'chat-only',
+    }))
+    expect(refused).toMatchObject({
+      ok: false,
+      error: {
+        code: 'session/tool-contract-confirmation-required',
+        details: { provider: 'chat-only', model: 'chat-only', toolCalls: 1 },
+      },
+    })
+    // The refusal is inert: the Session keeps the tool-capable model it had.
+    expect(currentSelection(ctx, sessionId)).toEqual({ provider: 'deepseek-official', model: 'deepseek-chat' })
+
+    const accepted = expectValue(await remote.selectModel(request({
+      sessionId, provider: 'chat-only', model: 'chat-only', acceptToolContract: true,
+    })))
+    expect(accepted.selected).toEqual({ provider: 'chat-only', model: 'chat-only' })
+    expect(currentSelection(ctx, sessionId)).toEqual({ provider: 'chat-only', model: 'chat-only' })
     await ctx.fiber.dispose()
   })
 

@@ -31,6 +31,11 @@ export interface ModelDirectoryState {
   status: 'idle' | 'loading' | 'ready' | 'selecting' | 'error'
   /** Selection submitted by the latest `select` until it settles; null otherwise. */
   pending: ModelSelection | null
+  /**
+   * A chat-only switch the Host refused until the user accepts the downgrade,
+   * with the tool calls it would flatten; null when nothing awaits an answer.
+   */
+  confirmation: { selection: ModelSelection; toolCalls: number } | null
   /** Whole-request or selection failure text; null when none. */
   error: string | null
 }
@@ -39,7 +44,8 @@ export interface ModelDirectoryState {
 export class ModelDirectory {
   /** The shared snapshot both entries render from (uSES-safe store). */
   readonly store: SnapshotStore<ModelDirectoryState> = createSnapshotStore<ModelDirectoryState>({
-    current: null, routable: null, groups: [], failures: [], status: 'idle', pending: null, error: null,
+    current: null, routable: null, groups: [], failures: [], status: 'idle', pending: null,
+    confirmation: null, error: null,
   })
 
   /** Latest selection operation wins; an older response never overwrites a newer one. */
@@ -86,16 +92,59 @@ export class ModelDirectory {
    * Select the complete provider/model/reasoning selection. The durable
    * projection frame updates the shared current; failures surface on the store
    * and return with the operation so each entry can present its own failure.
+   *
+   * A chat-only model on a Session that already ran tools does not surface as a
+   * plain failure: the Host's refusal becomes
+   * {@link ModelDirectoryState.confirmation}, which the menu renders in place.
+   * The refusal is still returned unchanged, so a caller that cannot show the
+   * strip can treat it as the error it is.
    * @param selection - provider, provider-owned model id, and optional adapter-owned effort.
    * @returns the selection outcome, including the original Remote failure.
    */
   async select(selection: ModelSelection): Promise<RemoteResult<void>> {
+    return this.submit(selection, false)
+  }
+
+  /**
+   * Re-submit the switch a chat-only model demanded, now that the user has
+   * accepted losing tool calls from here on.
+   * @returns the selection outcome; a confirmation that already cleared settles as success.
+   */
+  async acceptToolContract(): Promise<RemoteResult<void>> {
+    const confirmation = this.store.getSnapshot().confirmation
+    if (confirmation === null) return { ok: true, value: undefined }
+    return this.submit(confirmation.selection, true)
+  }
+
+  /** Drop a pending confirmation, leaving the current model in place. */
+  dismissConfirmation(): void {
+    if (this.disposed) return
+    this.store.update((state) => {
+      state.confirmation = null
+      if (state.status === 'selecting') state.status = 'ready'
+      state.pending = null
+      state.error = null
+    })
+  }
+
+  /**
+   * Run one selection submission.
+   * @param selection - the complete selection to persist.
+   * @param acceptToolContract - whether the user has accepted losing tool calls.
+   * @returns the selection outcome, including the original Remote failure.
+   */
+  private async submit(selection: ModelSelection, acceptToolContract: boolean): Promise<RemoteResult<void>> {
     this.assertAvailable()
     const previous = this.store.getSnapshot().current
     const previousEffort = previous?.reasoningEffort ?? (previous === null ? undefined : this.catalog.reasoningFor(previous)?.defaultEffort)
     const nextEffort = selection.reasoningEffort ?? this.catalog.reasoningFor(selection)?.defaultEffort
     const generation = ++this.generation
-    this.store.update((s) => { s.status = 'selecting'; s.pending = selection; s.error = null })
+    this.store.update((s) => {
+      s.status = 'selecting'
+      s.pending = selection
+      s.confirmation = null
+      s.error = null
+    })
     const result = await this.sessions.selectModel({
       sessionId: this.sessionId,
       provider: selection.provider,
@@ -103,11 +152,22 @@ export class ModelDirectory {
       ...selection.reasoningEffort === undefined
         ? {}
         : { reasoningEffort: selection.reasoningEffort },
+      ...acceptToolContract ? { acceptToolContract: true } : {},
     })
     if (this.disposed || generation !== this.generation) {
       return result.ok ? { ok: true, value: undefined } : result
     }
     if (!result.ok) {
+      if (result.error.code === 'session/tool-contract-confirmation-required') {
+        const { toolCalls } = result.error.details
+        this.store.update((s) => {
+          s.status = 'ready'
+          s.pending = null
+          s.error = null
+          s.confirmation = { selection, toolCalls }
+        })
+        return result
+      }
       this.store.update((s) => {
         s.status = 'error'
         s.pending = null
@@ -123,7 +183,7 @@ export class ModelDirectory {
         ...this.isBlank() ? {} : { session_id: this.sessionId }, model_name: to, switch_from: previousEffort ?? 'default', switch_to: nextEffort ?? 'default',
       })
     }
-    this.store.update((s) => { s.status = 'ready'; s.pending = null; s.error = null })
+    this.store.update((s) => { s.status = 'ready'; s.pending = null; s.confirmation = null; s.error = null })
     this.syncInputs()
     return { ok: true, value: undefined }
   }
@@ -173,6 +233,7 @@ export class ModelDirectory {
         failures: catalog.value?.failures ?? [],
         status: catalog.status === 'error' ? 'error' : 'loading',
         pending: this.store.getSnapshot().pending,
+        confirmation: this.store.getSnapshot().confirmation,
         error: catalog.error,
       })
       return
@@ -190,6 +251,7 @@ export class ModelDirectory {
         ? 'selecting'
         : 'ready',
       pending: this.store.getSnapshot().pending,
+      confirmation: this.store.getSnapshot().confirmation,
       error: null,
     })
   }

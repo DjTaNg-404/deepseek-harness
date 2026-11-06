@@ -116,6 +116,27 @@ DeepSeek 将省略的 `inputModalities` 视为纯文本，并拒绝空列表。�
 
 这两个字段都是对你端点的断言，而不是对它的检查。声明了端点并不提供的图片能力的模型不会在这里被拦下，改由提供商拒绝该请求。
 
+### 工具能力
+
+通过 OpenAI 兼容桥接入的模型可能接受 `tools` 却忽略它们，因为桥在自己的那一侧运行了 Agent 循环。这类模型永远不会产出工具调用，所以不要给它下发工具 schema，也不要让系统提示词里保留工具段：否则它会叙述一些没人执行的调用，而且会话里每次重放的工具调用都要按纯文本继续付费。
+
+在路由上声明一次即可：
+
+```yaml
+- id: llm-pi-ai
+  config:
+    providers:
+      bridge:
+        apiKeyEnv: BRIDGE_API_KEY
+        api: openai-completions
+        baseURL: https://bridge.example/v1
+        defaultSupportsTools: false
+        models:
+          - id: bridge-chat
+```
+
+`supportsTools: false` 只对单个模型收回工具能力，显式的 `supportsTools: true` 可以赢回路由级的 `false`。该字段默认为 `true`，因此未声明它的路由行为完全不变。模型选择器会为不能调用工具的模型加上标签；在已经跑过工具的会话里切到这种模型时，会先要求确认；切换之后，请求不再携带 `tools`，提示词也不再包含工具段。
+
 ### DeepSeek 账号的模型
 
 已登录 DeepSeek 账号的模型列表来自账号服务，因此模型页不为它提供模型编辑器。要调整单个模型，在 `$DSH_HOME/profiles/<profile>/cordis.patch.yml` 中使用 `modelOverrides`；字段与 DeepSeek 的 `models` 条目相同，未设置的字段沿用列表中的值：

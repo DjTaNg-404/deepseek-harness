@@ -158,6 +158,14 @@ export function apply(ctx: ClientContext): void {
           const result = await directory.select(selection)
           if (!result.ok) {
             if (result.error.code === 'session/writer-held') throw new Error(t('error.sessionInUse'))
+            // The popup cannot host the in-place confirmation strip, so it
+            // hands the decision back instead of switching silently.
+            if (result.error.code === 'session/tool-contract-confirmation-required') {
+              throw new Error(t('error.toolContract', {
+                model: selection.model,
+                count: String(result.error.details.toolCalls),
+              }))
+            }
             throw result.error
           }
         },
@@ -189,6 +197,10 @@ export function apply(ctx: ClientContext): void {
           select: (selection: ModelSelection) => available
             ? directory.select(selection)
             : Promise.resolve(undefined),
+          acceptToolContract: () => available
+            ? directory.acceptToolContract()
+            : Promise.resolve(undefined),
+          dismissConfirmation: () => { if (available) directory.dismissConfirmation() },
         }
       },
     }, ModelSelect))

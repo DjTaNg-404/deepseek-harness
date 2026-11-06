@@ -85,6 +85,29 @@ describe('modality schema boundary', () => {
   })
 })
 
+describe('tool capability schema boundary', () => {
+  it('rejects a non-boolean declaration at either level', () => {
+    expect(configWith({ supportsTools: 'no' })).toThrow(/expected/)
+    expect(routeWith({ defaultSupportsTools: 'no' })).toThrow(/expected/)
+  })
+
+  it('defaults a route to capable while an entry keeps absence distinct', () => {
+    // Same materialization the settings seam runs: the route default becomes
+    // `true`, while an entry that says nothing stays `undefined` so the route
+    // (or, absent that, the capable default) answers for it.
+    type Materialized = {
+      providers: Record<string, { defaultSupportsTools?: unknown; models?: { supportsTools?: unknown }[] }>
+    }
+    const absent = configWith({})() as Materialized
+    expect(absent.providers['acme-gateway']?.defaultSupportsTools).toBe(true)
+    expect(absent.providers['acme-gateway']?.models?.[0]?.supportsTools).toBeUndefined()
+    expect((configWith({ supportsTools: false })() as Materialized)
+      .providers['acme-gateway']?.models?.[0]?.supportsTools).toBe(false)
+    expect((routeWith({ defaultSupportsTools: false })() as Materialized)
+      .providers['acme-gateway']?.defaultSupportsTools).toBe(false)
+  })
+})
+
 describe('request image policy bounds', () => {
   it.each([
     ['requestImagePixelBudget', 0, /requestImagePixelBudget must be a positive safe integer/],

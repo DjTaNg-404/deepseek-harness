@@ -744,6 +744,10 @@ export class LlmRuntime extends TypertRemoteService {
         ...badge === undefined ? {} : {
           badge: { text: typeof badge.text === 'string' ? badge.text : { ...badge.text }, tone: badge.tone },
         },
+        // A withheld capability is the only value worth carrying; absence is
+        // already the capable answer, and rebuilding the entry here would
+        // otherwise drop the adapter's declaration on the floor.
+        ...model.supportsTools === undefined ? {} : { supportsTools: model.supportsTools },
       }
     })
   }
@@ -839,6 +843,7 @@ export class LlmRuntime extends TypertRemoteService {
       ...defaultMaxTokens === undefined ? {} : { defaultMaxTokens },
       ...resolved.systemPromptUpdate === undefined ? {} : { systemPromptUpdate: resolved.systemPromptUpdate },
       ...resolved.toolUpdate === undefined ? {} : { toolUpdate: resolved.toolUpdate },
+      ...resolved.supportsTools === undefined ? {} : { supportsTools: resolved.supportsTools },
     }
     const reasoning = resolved.reasoning
     if (reasoning === undefined) return info

@@ -64,7 +64,7 @@ const MEASURE_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0 }
  * @returns the trigger and, while open, the two-level menu.
  */
 export function ModelSelect(
-  { locked, available, directory, load, select, resolveText, t, renderSlot }:
+  { locked, available, directory, load, select, acceptToolContract, dismissConfirmation, resolveText, t, renderSlot }:
   ModelSelectInjected & Pick<PropsRuntime<'conversation.input.model'>, 'locked'> & PropsLocale<'model'>
     & Omit<PropsRenderSlots<'conversation.input.model.label' | 'conversation.input.model.options'>, 'SessionProvider'>,
 ) {
@@ -363,6 +363,9 @@ export function ModelSelect(
       return
     }
     const { error } = result
+    // The directory already turned this refusal into the in-place strip below;
+    // a toast on top of it would ask the same question twice.
+    if (error.code === 'session/tool-contract-confirmation-required') return
     toastSeq.current += 1
     setToast({
       seq: toastSeq.current,
@@ -402,6 +405,15 @@ export function ModelSelect(
     submit(selection)
   }
 
+  // Held in a local so the JSX callbacks below keep the narrowing.
+  const confirmation = state.confirmation
+  // Name the pending switch the way the catalog does; a model that already left
+  // the catalog still has its id to show.
+  const confirmationName = confirmation === null
+    ? undefined
+    : choices.find(choice => choice.selection.provider === confirmation.selection.provider
+      && choice.selection.model === confirmation.selection.model)?.model.name
+      ?? confirmation.selection.model
   const waiting = currentChoice === undefined && state.status === 'loading'
   const modelLabel = waiting
     ? t('trigger.loading')
@@ -418,21 +430,36 @@ export function ModelSelect(
   const renderModelLabel = (
     provider: ModelLabelOwner['provider'], model: ModelLabelOwner['model'],
     placement: ModelLabelOwner['placement'], selected: boolean,
-  ) => (
-    <span data-provider-id={provider.id} data-model-id={model.id}>
-      {renderSlot('conversation.input.model.label', {
-        provider, model, placement, selected,
-      }, {
-        fallback: model.badge === undefined ? model.name : (
-          <span className={css.badgedName}>
-            {placement === 'trigger' ? <><Tag className={css.badge} tone={model.badge.tone}>{resolveText(model.badge.text)}</Tag>{' '}</> : null}
-            <span className={css.badgedNameText}>{model.name}</span>
-            {placement === 'trigger' ? null : <>{' '}<Tag className={css.badge} tone={model.badge.tone}>{resolveText(model.badge.text)}</Tag></>}
-          </span>
-        ),
-      })}
-    </span>
-  )
+  ) => {
+    // Capability first: a chat-only model is the thing a reader must not miss,
+    // while a badge is the provider's own decoration.
+    const labels = (
+      <>
+        {model.supportsTools === false
+          ? <Tag className={css.badge} tone="warning">{t('tag.noTools')}</Tag>
+          : null}
+        {model.badge === undefined
+          ? null
+          : <Tag className={css.badge} tone={model.badge.tone}>{resolveText(model.badge.text)}</Tag>}
+      </>
+    )
+    const labelled = model.supportsTools === false || model.badge !== undefined
+    return (
+      <span data-provider-id={provider.id} data-model-id={model.id}>
+        {renderSlot('conversation.input.model.label', {
+          provider, model, placement, selected,
+        }, {
+          fallback: labelled ? (
+            <span className={css.badgedName}>
+              {placement === 'trigger' ? <>{labels}{' '}</> : null}
+              <span className={css.badgedNameText}>{model.name}</span>
+              {placement === 'trigger' ? null : <>{' '}{labels}</>}
+            </span>
+          ) : model.name,
+        })}
+      </span>
+    )
+  }
   let itemIndex = 0
   let modelIndex = 0
   const itemRef = () => {
@@ -495,6 +522,34 @@ export function ModelSelect(
           aria-label={t('menu.aria')}
           aria-busy={state.status === 'loading' || busy}
         >
+          {confirmation !== null && (
+            <div className={css.confirmation} role="alert">
+              <span>
+                {t('confirm.toolsUnavailable', {
+                  model: confirmationName ?? confirmation.selection.model,
+                  count: String(confirmation.toolCalls),
+                })}
+              </span>
+              <span className={css.confirmationActions}>
+                <button
+                  type="button"
+                  className={css.retry}
+                  disabled={busy}
+                  onClick={() => { void acceptToolContract().then(settleSelection) }}
+                >
+                  {t('confirm.accept')}
+                </button>
+                <button
+                  type="button"
+                  className={`${css.retry} ${css.dismiss}`}
+                  disabled={busy}
+                  onClick={dismissConfirmation}
+                >
+                  {t('confirm.cancel')}
+                </button>
+              </span>
+            </div>
+          )}
           {pane === 'root' && (
             <>
               <button ref={itemRef()} type="button" role="menuitem" className={css.cell} onClick={() => { drill('model') }}>
