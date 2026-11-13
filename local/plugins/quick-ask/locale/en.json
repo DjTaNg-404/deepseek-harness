@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Quick ask",
+    "description": "Select text in the conversation and ask about it in a throwaway mini dialog that never writes back to the main conversation."
+  }
+}
