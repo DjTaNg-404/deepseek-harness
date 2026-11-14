@@ -24,6 +24,12 @@ window.__ModuleLoader__.load({
         emptyHint: '直接回车，让它解释这段文字',
         failed: '没能打开小窗',
         sendFailed: '发送失败',
+        stopFailed: '没能停止',
+        stop: '停止',
+        prompt: '请解释下面这段文字：',
+        explain: '解释一下。',
+        inputLabel: '追问内容',
+        detached: '来自另一个对话 · 关闭即丢弃',
       },
       en: {
         trigger: 'Ask',
@@ -37,6 +43,12 @@ window.__ModuleLoader__.load({
         emptyHint: 'Press Enter to ask for an explanation',
         failed: 'The dialog could not open',
         sendFailed: 'The message was not sent',
+        stopFailed: 'Could not stop',
+        stop: 'Stop',
+        prompt: 'Explain the following text:',
+        explain: 'Give me an explanation.',
+        inputLabel: 'Question',
+        detached: 'From another conversation · discarded on close',
       },
     }
 
@@ -132,7 +144,7 @@ window.__ModuleLoader__.load({
   flex: 1 1 auto; min-height: 36px; max-height: 132px; resize: none;
   padding: 8px 10px; border-radius: 8px; outline: none;
   border: 1px solid var(--dsw-alias-border-l1); background: var(--dsw-alias-bg-layer-2);
-  color: var(--dsw-alias-label-primary); font: 13px/1.5 inherit;
+  color: var(--dsw-alias-label-primary); font: 13px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 .qa-input:focus { border-color: var(--dsw-alias-brand-primary); }
 .qa-send {
@@ -143,18 +155,29 @@ window.__ModuleLoader__.load({
 }
 .qa-send:hover:not(:disabled) { background: var(--dsw-alias-button-primary-hover); }
 .qa-send:disabled { opacity: 0.4; cursor: not-allowed; }
+.qa-send.qa-stop {
+  background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary);
+  border: 1px solid var(--dsw-alias-border-l1);
+}
+.qa-send.qa-stop:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); }
+.qa-chip:focus-visible, .qa-close:focus-visible, .qa-send:focus-visible, .qa-input:focus-visible {
+  outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 2px;
+}
 `
 
     const INLINE = /(`[^`\n]+`|\*\*[^*\n]+\*\*|__[^_\n]+__|\*[^*\n]+\*|_[^_\n]+_|~~[^~\n]+~~|\[[^\]\n]+\]\([^)\s]+\))/g
-    const QUESTION_PREFIX = '请解释下面这段文字：'
+    /** Every localized instruction prefix used by the first prompt. */
+    const QUESTION_PROMPTS = Object.values(DICT).map(dict => dict.prompt)
 
     /** @returns the shared, apply-scoped dialogue state. */
     function createRuntime() {
       const scopes = new Map()
       const listeners = new Set()
-      let snapshot = { trigger: null, dialog: null }
+      let snapshot = { trigger: null, dialog: null, activeSession: null }
       return {
         scopes,
+        /** Bumped to invalidate an openDialog that is still awaiting the fork. */
+        openToken: 0,
         getSnapshot: () => snapshot,
         subscribe(listener) {
           listeners.add(listener)
@@ -171,17 +194,14 @@ window.__ModuleLoader__.load({
     function createTranslate(locale) {
       let bound = null
       try {
-        if (locale !== undefined && typeof locale.register === 'function') {
-          locale.register('quickAsk', DICT)
-          bound = locale.bind('quickAsk')
-        }
+        if (locale !== undefined && typeof locale.bind === 'function') bound = locale.bind('quickAsk')
       } catch {
         bound = null
       }
       return (key) => {
         try {
           const value = bound === null ? undefined : bound(key)
-          if (typeof value === 'string' && value !== '') return value
+          if (typeof value === 'string' && value !== '' && value !== key) return value
         } catch {
           // Fall through to the bundled copy when the dictionary is unavailable.
         }
@@ -199,19 +219,22 @@ window.__ModuleLoader__.load({
         .trim()
     }
 
-    /** @returns the largest event seq present in one window. */
-    function maxSeq(windowSnapshot) {
+    /** @returns the last durable event seq in one window. */
+    function lastDurableSeq(windowSnapshot) {
       let max = 0
       for (const entry of windowSnapshot.entries) {
+        // Transient live chunks carry fractional seqs (cursor + 1 - 1/n); the
+        // fork command only admits a real event seq, so they never count.
+        if (entry.type !== 'event') continue
         const seq = entry.event?.seq
-        if (typeof seq === 'number' && seq > max) max = seq
+        if (typeof seq === 'number' && Number.isSafeInteger(seq) && seq > max) max = seq
       }
       return max
     }
 
     /** @returns the question part of our own first prompt, without the quoted selection. */
     function displayUserText(text) {
-      if (!text.startsWith(QUESTION_PREFIX)) return text
+      if (!QUESTION_PROMPTS.some(prefix => text.startsWith(prefix))) return text
       const marker = '」\n\n'
       const index = text.lastIndexOf(marker)
       if (index < 0) return text
@@ -425,35 +448,74 @@ window.__ModuleLoader__.load({
       }
     }
 
+    /** Release a reference and archive a child that will never be shown. */
+    async function discardChild(deps, childId, reference) {
+      if (reference !== null) {
+        try { reference.release() } catch { /* The reference is already gone. */ }
+      }
+      if (childId === null) return
+      try {
+        await deps.uiWorkspace?.archiveSession?.(childId, { stopActivity: true })
+      } catch {
+        // Archiving is best effort: the child still never writes back to the main line.
+      }
+    }
+
     /**
      * Open a forked child session and swap the dialog into its chat phase.
+     * Every await is followed by a cancellation check: closing the dialog while
+     * the fork is in flight must not resurrect it, and must not leak the child.
      * @param runtime - shared dialogue state.
      * @param deps - sessions and workspace services.
      * @param translate - localized copy lookup.
      * @param trigger - the admitted selection.
      */
     async function openDialog(runtime, deps, translate, trigger) {
-      runtime.patch({ trigger: null, dialog: { phase: 'forking', quote: trigger.text } })
+      if (runtime.getSnapshot().dialog !== null) return
+      const token = ++runtime.openToken
+      const cancelled = () => runtime.openToken !== token || runtime.getSnapshot().dialog === null
+      runtime.patch({
+        trigger: null,
+        dialog: { phase: 'forking', quote: trigger.text, sessionId: trigger.sessionId },
+      })
+      let childId = null
+      /** Captures the child even when the optional title rename fails after creation. */
+      let createdId = null
+      let reference = null
       try {
         const parent = deps.sessions.binding(trigger.sessionId)
-        const boundary = parent === undefined ? 0 : maxSeq(parent.eventSource.getSnapshot())
-        const childId = await deps.sessions.fork(boundary > 0
-          ? { sessionId: trigger.sessionId, atSeq: boundary }
-          : { sessionId: trigger.sessionId })
-        const reference = deps.sessions.retain(childId, { source: 'gateway' })
+        const boundary = parent === undefined ? 0 : lastDurableSeq(parent.eventSource.getSnapshot())
+        childId = await deps.sessions.fork({
+          sessionId: trigger.sessionId,
+          increaseTitle: true,
+          onCreated: (id) => { createdId = id },
+          ...(boundary > 0 ? { atSeq: boundary } : {}),
+        })
+        if (cancelled()) {
+          await discardChild(deps, childId, null)
+          return
+        }
+        reference = deps.sessions.retain(childId, { source: 'gateway' })
         const binding = await reference.ready
-        const forkPoint = boundary > 0 ? boundary : maxSeq(binding.eventSource.getSnapshot())
+        if (cancelled()) {
+          await discardChild(deps, childId, reference)
+          return
+        }
+        const forkPoint = boundary > 0 ? boundary : lastDurableSeq(binding.eventSource.getSnapshot())
         runtime.patch({
           dialog: {
-            phase: 'chat', quote: trigger.text, childId, reference, binding,
-            boundary: forkPoint, pos: defaultPanelPos(), error: null,
+            phase: 'chat', quote: trigger.text, sessionId: trigger.sessionId,
+            childId, reference, binding, boundary: forkPoint, error: null,
           },
         })
       } catch (error) {
+        await discardChild(deps, childId ?? createdId, reference)
+        if (cancelled()) return
         runtime.patch({
           dialog: {
             phase: 'error',
             quote: trigger.text,
+            sessionId: trigger.sessionId,
             error: `${translate('failed')}: ${error instanceof Error ? error.message : String(error)}`,
           },
         })
@@ -462,17 +524,23 @@ window.__ModuleLoader__.load({
 
     /**
      * Close the dialog: stop and archive the child, release its reference, and drop the state.
+     * Bumping the token also cancels a fork that is still being opened.
      * @param runtime - shared dialogue state.
      * @param deps - sessions and workspace services.
      */
     function closeDialog(runtime, deps) {
       const dialog = runtime.getSnapshot().dialog
-      runtime.patch({ dialog: null })
+      runtime.openToken += 1
+      runtime.patch({ dialog: null, trigger: null })
       if (dialog === null || dialog.phase !== 'chat') return
       try { dialog.reference.release() } catch { /* The reference is already gone. */ }
-      deps.uiWorkspace?.archiveSession?.(dialog.childId, { stopActivity: true })?.catch(() => {
-        // Archiving is best effort: the child still never writes back to the main line.
-      })
+      try {
+        deps.uiWorkspace?.archiveSession?.(dialog.childId, { stopActivity: true })?.catch(() => {
+          // Archiving is best effort: the child still never writes back to the main line.
+        })
+      } catch {
+        // A synchronous archive failure must not break the close handler.
+      }
     }
 
     /** Hidden dock marker that tells the overlay which conversation a selection belongs to. */
@@ -482,6 +550,7 @@ window.__ModuleLoader__.load({
       React.useEffect(() => {
         if (typeof sessionId !== 'string') return () => {}
         runtime.scopes.set(sessionId, () => (ref.current === null ? null : ref.current.closest('[data-conversation-scroll]')))
+        if (runtime.getSnapshot().activeSession !== sessionId) runtime.patch({ activeSession: sessionId })
         return () => {
           if (runtime.scopes.get(sessionId) !== undefined) runtime.scopes.delete(sessionId)
         }
@@ -489,8 +558,13 @@ window.__ModuleLoader__.load({
       return h('span', { ref, style: { display: 'none' }, 'aria-hidden': 'true' })
     }
 
+    /** One settled answer; memoized so streaming never re-parses earlier messages. */
+    const AssistantBubble = React.memo(function AssistantBubble(props) {
+      return h('div', { className: 'qa-assistant' }, renderMarkdown(props.text))
+    })
+
     /** The forked child conversation shown inside the dialog. */
-    function MiniChat(props) {
+    const MiniChat = React.memo(function MiniChat(props) {
       const { dialog, t } = props
       const getWindow = React.useCallback(() => dialog.binding.eventSource.getSnapshot(), [dialog.binding])
       const subscribeWindow = React.useCallback(fn => dialog.binding.eventSource.subscribe(fn), [dialog.binding])
@@ -501,14 +575,21 @@ window.__ModuleLoader__.load({
       const { items, live } = foldMessages(windowSnapshot, dialog.boundary)
       const [draft, setDraft] = React.useState('')
       const [sending, setSending] = React.useState(false)
+      const [stopping, setStopping] = React.useState(false)
       const [error, setError] = React.useState(null)
       const listRef = React.useRef(null)
       const inputRef = React.useRef(null)
-      const running = sessionSnapshot.running || sending
+      /** Follow the tail only while the reader is already at the bottom. */
+      const pinnedRef = React.useRef(true)
+      /** The first question as the user saw it, so the bubble never parses the prompt back. */
+      const firstAskedRef = React.useRef(null)
+      const running = sessionSnapshot.running
+      const busy = running || sending
+      const firstUserId = items.find(item => item.kind === 'user')?.id
 
       React.useEffect(() => {
         const node = listRef.current
-        if (node !== null) node.scrollTop = node.scrollHeight
+        if (node !== null && pinnedRef.current) node.scrollTop = node.scrollHeight
       }, [items.length, live, running])
 
       React.useEffect(() => {
@@ -516,14 +597,21 @@ window.__ModuleLoader__.load({
         if (node !== null) node.focus()
       }, [])
 
+      const onListScroll = () => {
+        const node = listRef.current
+        if (node === null) return
+        pinnedRef.current = node.scrollHeight - node.scrollTop - node.clientHeight < 24
+      }
+
       const send = React.useCallback(async () => {
-        if (running) return
+        if (busy) return
         const question = draft.trim()
         const first = items.length === 0
         if (question === '' && !first) return
-        const payload = first
-          ? `${QUESTION_PREFIX}\n\n「${dialog.quote}」\n\n${question === '' ? '解释一下。' : question}`
-          : question
+        const asked = question === '' ? t('explain') : question
+        if (first) firstAskedRef.current = asked
+        const payload = first ? `${t('prompt')}\n\n「${dialog.quote}」\n\n${asked}` : question
+        pinnedRef.current = true
         setSending(true)
         setError(null)
         setDraft('')
@@ -537,7 +625,23 @@ window.__ModuleLoader__.load({
         } finally {
           setSending(false)
         }
-      }, [dialog.binding, dialog.quote, draft, items.length, running, t])
+      }, [busy, dialog.binding, dialog.quote, draft, items.length, t])
+
+      const stop = React.useCallback(async () => {
+        if (stopping) return
+        setStopping(true)
+        setError(null)
+        try {
+          const result = await dialog.binding.session.cancel()
+          if (result !== undefined && result !== null && result.ok === false) {
+            setError(`${t('stopFailed')}: ${result.error?.message ?? ''}`.trim())
+          }
+        } catch (failure) {
+          setError(`${t('stopFailed')}: ${failure instanceof Error ? failure.message : String(failure)}`)
+        } finally {
+          setStopping(false)
+        }
+      }, [dialog.binding, stopping, t])
 
       const onKeyDown = (event) => {
         if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent?.isComposing) {
@@ -546,15 +650,23 @@ window.__ModuleLoader__.load({
         }
       }
 
+      const bubbleText = item => (item.kind === 'user' && item.id === firstUserId
+        && firstAskedRef.current !== null
+        ? firstAskedRef.current
+        : item.text)
+
       return h(React.Fragment, null,
         h('div', { className: 'qa-quote', title: dialog.quote }, dialog.quote),
-        h('div', { className: 'qa-list', ref: listRef },
+        h('div', {
+          className: 'qa-list', ref: listRef, onScroll: onListScroll,
+          role: 'log', 'aria-live': 'polite', 'aria-relevant': 'additions text',
+        },
           items.length === 0 && live === '' && !running
             ? h('div', { className: 'qa-note' }, t('emptyHint'))
             : null,
           ...items.map(item => (item.kind === 'user'
-            ? h('div', { key: item.id, className: 'qa-user' }, item.text)
-            : h('div', { key: item.id, className: 'qa-assistant' }, renderMarkdown(item.text)))),
+            ? h('div', { key: item.id, className: 'qa-user' }, bubbleText(item))
+            : h(AssistantBubble, { key: item.id, text: item.text }))),
           live !== ''
             ? h('div', { className: 'qa-assistant' }, renderMarkdown(live))
             : null,
@@ -569,38 +681,72 @@ window.__ModuleLoader__.load({
             rows: 1,
             value: draft,
             placeholder: t('placeholder'),
-            disabled: running,
+            'aria-label': t('inputLabel'),
+            disabled: busy,
             onChange: event => setDraft(event.target.value),
             onKeyDown,
           }),
           h('button', {
             type: 'button',
-            className: 'qa-send',
-            disabled: running,
-            onClick: () => { void send() },
-          }, t('send'))))
-    }
+            className: running ? 'qa-send qa-stop' : 'qa-send',
+            disabled: sending || stopping,
+            onClick: () => { if (running) void stop(); else void send() },
+          }, running ? t('stop') : t('send'))))
+    })
 
     /** Root-scope overlay: the selection chip and the draggable throwaway dialog. */
     function QuickAskOverlay(props) {
       const { runtime, deps, t } = props
       const snapshot = React.useSyncExternalStore(runtime.subscribe, runtime.getSnapshot)
       const dialog = snapshot.dialog
+      const getLocale = React.useCallback(() => {
+        try { return deps.locale?.getSnapshot() ?? null } catch { return null }
+      }, [deps.locale])
+      const subscribeLocale = React.useCallback(
+        fn => deps.locale?.subscribe?.(fn) ?? (() => {}),
+        [deps.locale],
+      )
+      const localeSnapshot = React.useSyncExternalStore(subscribeLocale, getLocale)
+      // Handed to the memoized MiniChat so a language switch still refreshes its labels.
+      const localeKey = localeSnapshot === null ? 0 : localeSnapshot.revision
       const panelRef = React.useRef(null)
       const dragRef = React.useRef(null)
       const [dragging, setDragging] = React.useState(false)
+      const [pos, setPos] = React.useState(null)
+
+      React.useEffect(() => {
+        if (dialog === null || dialog.phase !== 'chat') {
+          dragRef.current = null
+          setDragging(false)
+          setPos(null)
+          return
+        }
+        setPos(current => current ?? defaultPanelPos())
+      }, [dialog])
 
       React.useEffect(() => {
         let frame
         let anchorFrames = 0
+        /** True while a primary-button gesture may still be extending the selection. */
+        let pointerSelecting = false
+        const clear = () => {
+          if (runtime.getSnapshot().trigger !== null) runtime.patch({ trigger: null })
+        }
         const schedule = () => {
           if (frame !== undefined) return
           frame = window.requestAnimationFrame(() => {
             frame = undefined
             if (runtime.getSnapshot().dialog !== null) return
+            // The host renders its quote bubble only after the gesture settles.
+            // Showing the chip mid-drag parks it at the selection corner and then
+            // makes it jump to the bubble's row on release, so stay hidden.
+            if (pointerSelecting) {
+              clear()
+              return
+            }
             const next = readSelection(runtime)
             if (next === null) {
-              runtime.patch({ trigger: null })
+              clear()
               return
             }
             const anchor = measureQuoteSurface(scopeRoot(runtime, next.sessionId))
@@ -624,13 +770,19 @@ window.__ModuleLoader__.load({
           anchorFrames += 1
           if (anchorFrames < 40) window.requestAnimationFrame(settleAnchor)
         }
-        const clear = () => {
-          if (runtime.getSnapshot().trigger !== null) runtime.patch({ trigger: null })
-        }
         const onPointerDown = (event) => {
+          pointerSelecting = event.button === 0
           const path = typeof event.composedPath === 'function' ? event.composedPath() : []
           const inside = path.some(node => node instanceof Element && node.hasAttribute('data-quick-ask-surface'))
           if (!inside) clear()
+        }
+        const onPointerUp = () => {
+          pointerSelecting = false
+          schedule()
+        }
+        const onPointerCancel = () => {
+          pointerSelecting = false
+          clear()
         }
         const onKeyDown = (event) => {
           if (event.key !== 'Escape') return
@@ -639,29 +791,28 @@ window.__ModuleLoader__.load({
         }
         const onScroll = () => clear()
         document.addEventListener('selectionchange', schedule)
-        document.addEventListener('pointerup', schedule)
+        document.addEventListener('pointerup', onPointerUp)
+        document.addEventListener('pointercancel', onPointerCancel)
         document.addEventListener('pointerdown', onPointerDown, true)
         document.addEventListener('keydown', onKeyDown)
         document.addEventListener('scroll', onScroll, true)
         window.addEventListener('resize', onScroll)
+        window.addEventListener('blur', onPointerCancel)
         return () => {
           if (frame !== undefined) window.cancelAnimationFrame(frame)
           document.removeEventListener('selectionchange', schedule)
-          document.removeEventListener('pointerup', schedule)
+          document.removeEventListener('pointerup', onPointerUp)
+          document.removeEventListener('pointercancel', onPointerCancel)
           document.removeEventListener('pointerdown', onPointerDown, true)
           document.removeEventListener('keydown', onKeyDown)
           document.removeEventListener('scroll', onScroll, true)
           window.removeEventListener('resize', onScroll)
+          window.removeEventListener('blur', onPointerCancel)
         }
       }, [runtime, deps])
 
-      const movePanel = React.useCallback((pos) => {
-        const current = runtime.getSnapshot().dialog
-        if (current === null || current.phase !== 'chat') return
-        runtime.patch({ dialog: { ...current, pos } })
-      }, [runtime])
-
       const onHeaderPointerDown = (event) => {
+        if (dialog === null || dialog.phase !== 'chat') return
         const target = event.target
         if (target instanceof Element && target.closest('button') !== null) return
         const node = panelRef.current
@@ -680,12 +831,30 @@ window.__ModuleLoader__.load({
         const height = node.offsetHeight
         const left = Math.max(8, Math.min(event.clientX - drag.dx, window.innerWidth - width - 8))
         const top = Math.max(8, Math.min(event.clientY - drag.dy, window.innerHeight - height - 8))
-        movePanel({ left, top })
+        setPos({ left, top })
       }
       const onHeaderPointerUp = (event) => {
         dragRef.current = null
         setDragging(false)
         event.currentTarget.releasePointerCapture?.(event.pointerId)
+      }
+      /** Keep Tab inside the non-modal panel so it cannot walk into the page behind it. */
+      const onPanelKeyDown = (event) => {
+        if (event.key !== 'Tab') return
+        const node = panelRef.current
+        if (node === null) return
+        const focusable = [...node.querySelectorAll('button:not([disabled]), textarea:not([disabled]), a[href]')]
+          .filter(element => element instanceof HTMLElement)
+        if (focusable.length === 0) return
+        const first = focusable[0]
+        const last = focusable[focusable.length - 1]
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault()
+          last.focus()
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault()
+          first.focus()
+        }
       }
 
       const trigger = snapshot.trigger
@@ -697,6 +866,7 @@ window.__ModuleLoader__.load({
           : h('button', {
             type: 'button',
             'data-quick-ask-surface': '',
+            'aria-haspopup': 'dialog',
             className: 'qa-chip',
             style: {
               left: hoverPlacement.left,
@@ -713,8 +883,11 @@ window.__ModuleLoader__.load({
             'data-dragging': dragging ? 'true' : 'false',
             className: 'qa-panel',
             ref: panelRef,
-            style: dialog.phase === 'chat' && dialog.pos !== undefined
-              ? { left: `${dialog.pos.left}px`, top: `${dialog.pos.top}px`, right: 'auto', bottom: 'auto' }
+            role: 'dialog',
+            'aria-label': t('title'),
+            onKeyDown: onPanelKeyDown,
+            style: dialog.phase === 'chat' && pos !== null
+              ? { left: `${pos.left}px`, top: `${pos.top}px`, right: 'auto', bottom: 'auto' }
               : { right: '16px', bottom: '16px' },
           },
           h('div', {
@@ -726,7 +899,10 @@ window.__ModuleLoader__.load({
           },
           h('div', { className: 'qa-headings' },
             h('span', { className: 'qa-title' }, t('title')),
-            h('span', { className: 'qa-hint' }, t('hint'))),
+            h('span', { className: 'qa-hint' },
+              snapshot.activeSession !== null && dialog.sessionId !== snapshot.activeSession
+                ? t('detached')
+                : t('hint'))),
           h('button', {
             type: 'button',
             className: 'qa-close',
@@ -735,7 +911,7 @@ window.__ModuleLoader__.load({
             'aria-label': t('close'),
           }, '✕')),
           dialog.phase === 'chat'
-            ? h(MiniChat, { dialog, t })
+            ? h(MiniChat, { dialog, t, localeKey })
             : h('div', { className: 'qa-note', style: { padding: '16px 14px' } },
               dialog.phase === 'error' ? (dialog.error ?? t('failed')) : t('forking'))),
       )
@@ -751,9 +927,19 @@ window.__ModuleLoader__.load({
         const uiWorkspace = ctx.get('uiWorkspace')
         const locale = ctx.get('locale')
         if (sessions === undefined) return
+        if (locale !== undefined) {
+          try {
+            ctx.effect(() => locale.register('quickAsk', DICT), 'quick-ask: dictionaries')
+          } catch {
+            // A namespace owned by an earlier apply falls back to the bundled copy.
+          }
+        }
         const runtime = createRuntime()
         const t = createTranslate(locale)
-        const deps = { sessions, uiWorkspace }
+        const deps = { sessions, uiWorkspace, locale }
+        // Unloading the Client half (HMR, disable, page teardown) must not leave a
+        // forked child retained or an in-flight open alive.
+        ctx.effect(() => () => { closeDialog(runtime, deps) }, 'quick-ask: teardown')
 
         ctx.slots.inject('conversation.composer.dock', () => ctx.slots.register({
           name: 'conversation.composer.dock', id: 'quick-ask-scope', order: 90,
