@@ -5,6 +5,7 @@
 ```
 local/
 ├── plugins/quick-ask/        划词「追问」插件（纯客户端，无 npm 依赖、不用编译）
+├── macos/DSH.app             双击启动的应用外壳（跑的就是 scripts/dsh-start.sh）
 └── scripts/                  启停 dsh 与安装插件
     ├── dsh-start.sh  / .ps1
     ├── dsh-stop.sh   / .ps1
@@ -29,6 +30,22 @@ local/
 启动脚本会：后台拉起 `dsh web --no-open`，把日志写到 `$DSH_HOME/logs/`，等它打印出带 token 的地址后自动开浏览器。已经在跑就只开页面，不会起第二个实例。
 
 停止脚本会先收子进程再收父进程，5 秒不退就强杀；pid 文件丢了还会按端口兜底。
+
+## macOS 双击启动（DSH.app）
+
+`local/macos/DSH.app` 是个**薄的包装器**，不是 Electron 重打包：双击 → 跑 `local/scripts/dsh-start.sh` → 就绪后开浏览器。约 60KB，不用签名、不用下载 Electron。
+
+- 想放到 Dock 或「应用程序」：拖过去就行（拖走后仍能用，它会把仓库路径记到 `~/Library/Application Support/DSH/repo-path`）。
+- 仓库找法：`DSH_REPO` → `.app` 在 `local/macos/` 下的相对位置 → 上次记住的路径。
+- 报错不弹终端，走系统对话框，详情在 `~/.dsh/logs/app-launch.log`。
+- 改了图标源 `local/macos/icon.svg` 之后重新生成：
+  ```sh
+  cd local/macos && sips -s format png icon.svg --out /tmp/i.png \
+    && sips -z 512 512 /tmp/i.png --out /tmp/i512.png \
+    && sips -s format icns /tmp/i512.png --out DSH.app/Contents/Resources/AppIcon.icns
+  ```
+
+Windows 侧没有对应外壳：直接跑 `dsh-start.ps1`，或者给它建个快捷方式（可选设图标）。
 
 ## 环境变量
 

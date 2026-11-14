@@ -1,0 +1,56 @@
+#!/bin/bash
+# DSH 启动器：.app 被双击时执行，转调仓库里的 local/scripts/dsh-start.sh。
+# 仓库位置按顺序解析：$DSH_REPO → .app 在仓库 local/macos/ 下的相对位置 → 上次记住的路径。
+# 设 DSH_NO_DIALOG=1 可以把错误打到 stderr 而不是弹窗（便于命令行调试）。
+set -u
+
+# 双击启动的进程不读 .zprofile/.zshrc，PATH 只有 /usr/bin:/bin:/usr/sbin:/sbin，
+# 会找不到 Homebrew 的 node。这里显式补上，顺序与交互式终端的 Homebrew shellenv 一致。
+export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin${PATH:+:$PATH}"
+
+SELF_DIR="$(cd "$(dirname "$0")" && pwd)"        # .../Contents/MacOS
+CONTENTS="$(cd "$SELF_DIR/.." && pwd)"           # .../Contents
+BUNDLE="$(cd "$CONTENTS/.." && pwd)"             # .../DSH.app
+HOST_DIR="$(cd "$BUNDLE/.." && pwd)"             # .../local/macos
+STATE_DIR="$HOME/Library/Application Support/DSH"
+STATE_FILE="$STATE_DIR/repo-path"
+
+fail() {
+  if [ "${DSH_NO_DIALOG:-0}" = "1" ]; then
+    printf 'DSH: %s\n' "$1" >&2
+    exit 1
+  fi
+  osascript -e "display dialog \"$1\" with title \"DeepSeek Harness\" buttons {\"好\"} default button 1 giving up after 120" >/dev/null 2>&1
+  exit 1
+}
+
+is_repo() { [ -n "${1:-}" ] && [ -f "$1/apps/cli/src/bin.ts" ]; }
+
+REPO="${DSH_REPO:-}"
+[ -n "$REPO" ] && ! is_repo "$REPO" && fail "DSH_REPO 指向的不是 dsh 仓库：$REPO"
+
+if ! is_repo "${REPO:-}"; then
+  REPO="$(cd "$HOST_DIR/../.." 2>/dev/null && pwd || true)"
+fi
+
+if ! is_repo "${REPO:-}" && [ -f "$STATE_FILE" ]; then
+  REPO="$(cat "$STATE_FILE" 2>/dev/null || true)"
+fi
+
+is_repo "${REPO:-}" || fail "找不到 dsh 仓库（试过 DSH_REPO、.app 相对位置、$STATE_FILE）。把 DSH.app 放回仓库的 local/macos/ 下，或设 DSH_REPO 指向仓库根。"
+
+# 记住这次解析到的仓库，.app 之后被拖到 /Applications 也能用
+mkdir -p "$STATE_DIR" 2>/dev/null && printf '%s\n' "$REPO" > "$STATE_FILE" 2>/dev/null
+
+START="$REPO/local/scripts/dsh-start.sh"
+[ -x "$START" ] || fail "启动脚本缺失或没有执行权限：$START"
+
+LOG_DIR="${DSH_HOME:-$HOME/.dsh}/logs"
+mkdir -p "$LOG_DIR" 2>/dev/null
+LOG="$LOG_DIR/app-launch.log"
+
+if ! "$START" >>"$LOG" 2>&1; then
+  fail "启动失败，详情见：$LOG"
+fi
+
+exit 0
