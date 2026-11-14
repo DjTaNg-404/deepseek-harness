@@ -7,7 +7,19 @@
       name: '@deepseek-ai/dsh-experimental-speech-to-text-sensevoice'
       config:
         dataRoot: !!js dshHomePath('speech-to-text', 'sensevoice')
+    - id: speech-to-text-deepseek
+      name: '@deepseek-ai/dsh-experimental-speech-to-text-deepseek'
+    - id: speech-to-text-auto
+      name: '@deepseek-ai/dsh-experimental-speech-to-text-auto'
+    - id: speech-synthesis
+      name: '@deepseek-ai/dsh-experimental-speech-synthesis'
+      config:
+        defaultProvider: deepseek-tts
+    - id: speech-synthesis-deepseek
+      name: '@deepseek-ai/dsh-experimental-speech-synthesis-deepseek'
     - id: api-speech-to-text
       name: '@deepseek-ai/dsh-experimental-api-speech-to-text'
     - id: ui-voice-input
       name: '@deepseek-ai/dsh-experimental-client-ui-voice-input'
+    - id: ui-read-aloud
+      name: '@deepseek-ai/dsh-experimental-client-ui-read-aloud'

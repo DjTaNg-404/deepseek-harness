@@ -2,7 +2,7 @@
 
 [English](voice-input.md) | 中文
 
-实验性语音识别包含三个角色：[服务定义](../../packages/experimental/speech-to-text/README.zh.md)路由具名 Provider，[SenseVoice Provider](../../packages/experimental/speech-to-text-sensevoice/README.zh.md)拥有本地推理，[Remote 消费者](../../packages/experimental/api-speech-to-text/README.zh.md)服务浏览器。[可选 Bundle](../../packages/experimental/voice-input-bundle/README.zh.md)将它们与麦克风 UI 组合。
+实验性语音识别包含三个角色：[服务定义](../../packages/experimental/speech-to-text/README.zh.md)路由具名 Provider，[SenseVoice Provider](../../packages/experimental/speech-to-text-sensevoice/README.zh.md)拥有本地推理，[DeepSeek Provider](../../packages/experimental/speech-to-text-deepseek/README.zh.md)把完整录音转发到云端接口，[Remote 消费者](../../packages/experimental/api-speech-to-text/README.zh.md)服务浏览器。[可选 Bundle](../../packages/experimental/voice-input-bundle/README.zh.md)将它们与麦克风 UI、[路由识别器](../../packages/experimental/speech-to-text-auto/README.zh.md)，以及[语音合成服务](../../packages/experimental/speech-synthesis/README.zh.md)及其 DeepSeek Provider（供朗读控件使用）组合起来。
 
 ## Provider 选择
 
@@ -86,9 +86,55 @@ Speech calls never activate or submit to an Agent.
  * @returns final transcript without adding a Session event.
  */
 @Remote async transcribe(request: TranscriptionRequest, signal: AbortSignal): Promise<Transcript>
+
+/**
+ * Synthesize one text through the explicit provider selection.
+ * @param request - text and optional provider and voice.
+ * @param signal - Client cancellation or Remote contribution disposal.
+ * @returns encoded audio with its media type.
+ */
+@Remote async synthesize(request: SynthesisRequest, signal: AbortSignal): Promise<SynthesisResult>
 ```
 
 Source: [`packages/experimental/api-speech-to-text/src/index.ts`](../../packages/experimental/api-speech-to-text/src/index.ts)
+
+<a id="ctxspeechsynthesis--speechsynthesis"></a>
+
+### `ctx.speechSynthesis` — `SpeechSynthesis`
+
+Registry shared by all synthesis consumers in one Host composition.
+
+```ts cordis-catalog
+/**
+ * Register one synthesizer; duplicate ids fail without replacing the original.
+ * @param provider - synthesizer owned by the contributing fiber.
+ * @returns idempotent disposer which rejects admission and joins accepted work.
+ */
+register(provider: SynthesisProvider): () => Promise<void>
+
+/**
+ * Read the current roster and default selection.
+ * @returns provider facts in registration order.
+ */
+snapshot(): SynthesisSnapshot
+
+/**
+ * Apply the default selection and validate the request before execution.
+ * @param request - text and optional selection.
+ * @returns provider-pinned input for synthesize().
+ */
+resolve(request: SynthesisRequest): SynthesisSpec
+
+/**
+ * Execute exactly the resolved provider; a withdrawn registration is rejected.
+ * @param spec - resolved input.
+ * @param signal - caller cancellation.
+ * @returns encoded audio after provider settlement.
+ */
+async synthesize(spec: SynthesisSpec, signal: AbortSignal): Promise<SynthesisAudio>
+```
+
+Source: [`packages/experimental/speech-synthesis/src/index.ts`](../../packages/experimental/speech-synthesis/src/index.ts)
 
 <a id="ctxspeechtotext--speechtotext"></a>
 

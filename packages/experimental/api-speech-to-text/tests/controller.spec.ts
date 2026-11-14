@@ -13,7 +13,7 @@ function fixture(maxAudioBytes = 32044, maxDurationSeconds = 1) {
   const speech = new SpeechToText(ctx, SpeechToText.Config({ defaultProvider: id, language: 'auto' }))
   const recognize = vi.fn(async () => ({ text: '你好', audioSeconds: 1, inferenceSeconds: 0.1 }))
   speech.register({ info: { id, name: 'test', location: 'host-local', languages: ['auto', 'zh', 'en', 'ja'] }, transcribe: recognize })
-  return { api: new SpeechController(ctx, { maxAudioBytes, maxDurationSeconds }), recognize }
+  return { api: new SpeechController(ctx, { maxAudioBytes, maxDurationSeconds, maxSynthesisAudioBytes: 8 * 1024 * 1024 }), recognize }
 }
 function recording(): string {
   const b = Buffer.alloc(32044)
@@ -47,7 +47,7 @@ it('forwards an explicit download source to the registered preparation owner', a
     preparation: { snapshot: () => ({ phase: 'unprepared' }), subscribe: () => () => {}, prepare, cancel: async () => {} },
     transcribe: async () => ({ text: '', audioSeconds: 0, inferenceSeconds: 0 }),
   })
-  const api = new SpeechController(ctx, { maxAudioBytes: 32044, maxDurationSeconds: 1 })
+  const api = new SpeechController(ctx, { maxAudioBytes: 32044, maxDurationSeconds: 1, maxSynthesisAudioBytes: 8 * 1024 * 1024 })
   expect(api.catalog().providers[0]?.downloadSources).toEqual(['https://hf-mirror.com'])
   api.prepare(id, { downloadSource: 'https://hf-mirror.com' })
   expect(prepare).toHaveBeenCalledWith({ downloadSource: 'https://hf-mirror.com' })
@@ -73,4 +73,48 @@ it('preserves cancellation and reports recognizer failures', async () => {
   await expect(api.transcribe({ audioBase64: recording() }, new AbortController().signal)).rejects.toMatchObject({ code: 'speech/transcription-failed', message: 'offline' })
   recognize.mockRejectedValueOnce('failed')
   await expect(api.transcribe({ audioBase64: recording() }, new AbortController().signal)).rejects.toMatchObject({ message: 'failed' })
+})
+
+/** Provide a fake synthesis registry and mount the same controller over it. */
+function synthesisFixture(options: {
+  readonly resolve?: () => unknown
+  readonly synthesize?: () => Promise<{ readonly audio: Uint8Array; readonly mimeType: string }>
+  readonly maxSynthesisAudioBytes?: number
+} = {}) {
+  const ctx = new Context(); roots.push(ctx)
+  const synthesize = vi.fn(options.synthesize ?? (async () => ({ audio: new Uint8Array([1, 2, 3]), mimeType: 'audio/wav' })))
+  const resolve = vi.fn(options.resolve ?? (() => ({ providerId: 'deepseek-tts', provider: {}, input: { text: 'hi', voiceId: 'stella' } })))
+  ctx.provide('speechSynthesis', { resolve, synthesize })
+  const maxSynthesisAudioBytes = options.maxSynthesisAudioBytes ?? 8 * 1024 * 1024
+  const api = new SpeechController(ctx, { maxAudioBytes: 32044, maxDurationSeconds: 1, maxSynthesisAudioBytes })
+  return { api, resolve, synthesize }
+}
+
+it('synthesizes through the composed registry and returns base64 audio', async () => {
+  const { api, synthesize } = synthesisFixture()
+  expect(await api.synthesize({ text: '你好' }, new AbortController().signal)).toEqual({ audioBase64: 'AQID', mimeType: 'audio/wav' })
+  expect(synthesize).toHaveBeenCalledOnce()
+})
+
+it('reports an undecomposed synthesis capability', async () => {
+  const api = new SpeechController(new Context(), { maxAudioBytes: 32044, maxDurationSeconds: 1, maxSynthesisAudioBytes: 1024 })
+  await expect(api.synthesize({ text: '你好' }, new AbortController().signal)).rejects.toMatchObject({ code: 'speech/synthesis-failed' })
+})
+
+it('reports intake rejected by the registry as invalid text', async () => {
+  const { api } = synthesisFixture({ resolve: () => { throw new Error('Synthesis text is empty') } })
+  await expect(api.synthesize({ text: '   ' }, new AbortController().signal)).rejects.toMatchObject({ code: 'speech/invalid-text', message: 'Synthesis text is empty' })
+})
+
+it('rejects audio past the configured byte limit', async () => {
+  const { api } = synthesisFixture({ maxSynthesisAudioBytes: 1024, synthesize: async () => ({ audio: new Uint8Array(2048), mimeType: 'audio/wav' }) })
+  await expect(api.synthesize({ text: '你好' }, new AbortController().signal)).rejects.toMatchObject({ code: 'speech/synthesis-failed' })
+})
+
+it('honors a pre-aborted cancellation', async () => {
+  const { api, synthesize } = synthesisFixture()
+  const controller = new AbortController()
+  controller.abort()
+  await expect(api.synthesize({ text: '你好' }, controller.signal)).rejects.toThrow()
+  expect(synthesize).not.toHaveBeenCalled()
 })

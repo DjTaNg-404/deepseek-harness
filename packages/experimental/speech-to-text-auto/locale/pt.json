@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Roteamento de voz automático",
+    "description": "Encaminha cada gravação ao reconhecedor local ou na nuvem."
+  }
+}

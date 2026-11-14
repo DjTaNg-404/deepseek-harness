@@ -61,10 +61,16 @@ kind: "package-group"
 | [`translator`](translator/README.zh.md) | 免登录 Google 与 Bing 文本翻译 | `ctx.translator` |
 | [`client-ui-cot-translation`](client-ui-cot-translation/README.zh.md) | 展开的思考内容翻译与原文控件 | `ctx.cotTranslation` |
 | [`cot-translation-bundle`](cot-translation-bundle/README.zh.md) | 默认禁用的思考内容翻译组合 | — |
+| [`speech-deepseek-key`](speech-deepseek-key/README.zh.md) | 语音 Provider 共用的 DeepSeek 凭据解析 | — |
+| [`speech-synthesis`](speech-synthesis/README.zh.md) | 具名语音合成 Provider | `ctx.speechSynthesis` |
+| [`speech-synthesis-deepseek`](speech-synthesis-deepseek/README.zh.md) | DeepSeek 云端语音合成 | — |
 | [`speech-to-text`](speech-to-text/README.zh.md) | 具名语音识别 Provider | `ctx.speechToText` |
 | [`speech-to-text-sensevoice`](speech-to-text-sensevoice/README.zh.md) | 托管本地 SenseVoice 推理 | — |
+| [`speech-to-text-deepseek`](speech-to-text-deepseek/README.zh.md) | 通过语音接缝接入的 DeepSeek 云端识别 | — |
+| [`speech-to-text-auto`](speech-to-text-auto/README.zh.md) | 在本地与云端 Provider 之间路由的识别器 | — |
 | [`api-speech-to-text`](api-speech-to-text/README.zh.md) | 带认证的临时转写 Remote | `ctx.speechController` |
 | [`client-ui-voice-input`](client-ui-voice-input/README.zh.md) | 麦克风录音与版本检查后的草稿插入 | — |
+| [`client-ui-read-aloud`](client-ui-read-aloud/README.zh.md) | 已完成回答的朗读控件 | — |
 | [`plugin-market-bundle`](plugin-market-bundle/README.zh.md) | 默认禁用的可选自定义插件索引：索引服务和「发现」标签页 | — |
 | [`liveshare`](liveshare/README.zh.md) | 可选 LiveShare host bundle：通过 Relay 以 `view` 或 `write` 档分享会话，派生与附件上传为独立开关 | 注入 `connection`；通过宿主 Web 资源提供查看页 |
 | [`liveshare-protocol`](liveshare-protocol/README.zh.md) | owner bundle 与 Relay 共用的线路帧与身份契约 | 库与协议，不使用 ctx key |

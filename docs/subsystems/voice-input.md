@@ -2,7 +2,7 @@
 
 English | [中文](voice-input.zh.md)
 
-Experimental speech recognition has three roles: the [Service Definition](../../packages/experimental/speech-to-text/README.md) routes named providers, the [SenseVoice provider](../../packages/experimental/speech-to-text-sensevoice/README.md) owns local inference, and the [Remote consumer](../../packages/experimental/api-speech-to-text/README.md) serves the browser. The [optional bundle](../../packages/experimental/voice-input-bundle/README.md) composes them with the microphone UI.
+Experimental speech recognition has three roles: the [Service Definition](../../packages/experimental/speech-to-text/README.md) routes named providers, the [SenseVoice provider](../../packages/experimental/speech-to-text-sensevoice/README.md) owns local inference, the [DeepSeek provider](../../packages/experimental/speech-to-text-deepseek/README.md) forwards complete recordings to the cloud endpoint, and the [Remote consumer](../../packages/experimental/api-speech-to-text/README.md) serves the browser. The [optional bundle](../../packages/experimental/voice-input-bundle/README.md) composes them with the microphone UI, a [routing recognizer](../../packages/experimental/speech-to-text-auto/README.md), and a [synthesis service](../../packages/experimental/speech-synthesis/README.md) with its DeepSeek provider behind a read-aloud control.
 
 ## Provider selection
 
@@ -86,9 +86,55 @@ Speech calls never activate or submit to an Agent.
  * @returns final transcript without adding a Session event.
  */
 @Remote async transcribe(request: TranscriptionRequest, signal: AbortSignal): Promise<Transcript>
+
+/**
+ * Synthesize one text through the explicit provider selection.
+ * @param request - text and optional provider and voice.
+ * @param signal - Client cancellation or Remote contribution disposal.
+ * @returns encoded audio with its media type.
+ */
+@Remote async synthesize(request: SynthesisRequest, signal: AbortSignal): Promise<SynthesisResult>
 ```
 
 Source: [`packages/experimental/api-speech-to-text/src/index.ts`](../../packages/experimental/api-speech-to-text/src/index.ts)
+
+<a id="ctxspeechsynthesis--speechsynthesis"></a>
+
+### `ctx.speechSynthesis` — `SpeechSynthesis`
+
+Registry shared by all synthesis consumers in one Host composition.
+
+```ts cordis-catalog
+/**
+ * Register one synthesizer; duplicate ids fail without replacing the original.
+ * @param provider - synthesizer owned by the contributing fiber.
+ * @returns idempotent disposer which rejects admission and joins accepted work.
+ */
+register(provider: SynthesisProvider): () => Promise<void>
+
+/**
+ * Read the current roster and default selection.
+ * @returns provider facts in registration order.
+ */
+snapshot(): SynthesisSnapshot
+
+/**
+ * Apply the default selection and validate the request before execution.
+ * @param request - text and optional selection.
+ * @returns provider-pinned input for synthesize().
+ */
+resolve(request: SynthesisRequest): SynthesisSpec
+
+/**
+ * Execute exactly the resolved provider; a withdrawn registration is rejected.
+ * @param spec - resolved input.
+ * @param signal - caller cancellation.
+ * @returns encoded audio after provider settlement.
+ */
+async synthesize(spec: SynthesisSpec, signal: AbortSignal): Promise<SynthesisAudio>
+```
+
+Source: [`packages/experimental/speech-synthesis/src/index.ts`](../../packages/experimental/speech-synthesis/src/index.ts)
 
 <a id="ctxspeechtotext--speechtotext"></a>
 

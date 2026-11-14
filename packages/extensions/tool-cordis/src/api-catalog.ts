@@ -3499,6 +3499,43 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [{ name: 'request', description: 'canonical WAV encoded as base64, provider id and language hint.' }, { name: 'signal', description: 'Client cancellation or Remote contribution disposal.' }],
         returns: 'final transcript without adding a Session event.',
       },
+      {
+        signature: '@Remote async synthesize(request: SynthesisRequest, signal: AbortSignal): Promise<SynthesisResult>',
+        description: 'Synthesize one text through the explicit provider selection.',
+        parameters: [{ name: 'request', description: 'text and optional provider and voice.' }, { name: 'signal', description: 'Client cancellation or Remote contribution disposal.' }],
+        returns: 'encoded audio with its media type.',
+      },
+    ],
+  },
+  {
+    key: 'speechSynthesis',
+    summary: 'Registry shared by all synthesis consumers in one Host composition.',
+    description: 'Registry shared by all synthesis consumers in one Host composition.',
+    methods: [
+      {
+        signature: 'register(provider: SynthesisProvider): () => Promise<void>',
+        description: 'Register one synthesizer; duplicate ids fail without replacing the original.',
+        parameters: [{ name: 'provider', description: 'synthesizer owned by the contributing fiber.' }],
+        returns: 'idempotent disposer which rejects admission and joins accepted work.',
+      },
+      {
+        signature: 'snapshot(): SynthesisSnapshot',
+        description: 'Read the current roster and default selection.',
+        parameters: [],
+        returns: 'provider facts in registration order.',
+      },
+      {
+        signature: 'resolve(request: SynthesisRequest): SynthesisSpec',
+        description: 'Apply the default selection and validate the request before execution.',
+        parameters: [{ name: 'request', description: 'text and optional selection.' }],
+        returns: 'provider-pinned input for synthesize().',
+      },
+      {
+        signature: 'async synthesize(spec: SynthesisSpec, signal: AbortSignal): Promise<SynthesisAudio>',
+        description: 'Execute exactly the resolved provider; a withdrawn registration is rejected.',
+        parameters: [{ name: 'spec', description: 'resolved input.' }, { name: 'signal', description: 'caller cancellation.' }],
+        returns: 'encoded audio after provider settlement.',
+      },
     ],
   },
   {
@@ -9361,6 +9398,42 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SurfaceSnapshot',
     declaration: 'export interface SurfaceSnapshot {\n    readonly generation: number;\n    readonly tree: readonly SerializedNode[] | null;\n}',
+  },
+  {
+    name: 'SynthesisAudio',
+    declaration: 'export interface SynthesisAudio {\n    readonly audio: Uint8Array;\n    readonly mimeType: string;\n}',
+  },
+  {
+    name: 'SynthesisInput',
+    declaration: 'export interface SynthesisInput {\n    readonly text: string;\n    readonly voiceId: string;\n}',
+  },
+  {
+    name: 'SynthesisProvider',
+    declaration: 'export interface SynthesisProvider {\n    readonly info: SynthesisProviderInfo;\n    synthesize(input: SynthesisInput, signal: AbortSignal): Promise<SynthesisAudio>;\n}',
+  },
+  {
+    name: 'SynthesisProviderId',
+    declaration: 'export type SynthesisProviderId = Branded<\'SynthesisProviderId\'>;',
+  },
+  {
+    name: 'SynthesisProviderInfo',
+    declaration: 'export interface SynthesisProviderInfo {\n    readonly id: SynthesisProviderId;\n    readonly name: string;\n    readonly location: \'host-local\' | \'cloud\';\n    readonly voices: readonly SynthesisVoice[];\n}',
+  },
+  {
+    name: 'SynthesisResult',
+    declaration: 'export interface SynthesisResult {\n    readonly audioBase64: string;\n    readonly mimeType: string;\n}',
+  },
+  {
+    name: 'SynthesisSnapshot',
+    declaration: 'export interface SynthesisSnapshot {\n    readonly providers: readonly SynthesisProviderInfo[];\n    readonly selection: {\n        readonly providerId: SynthesisProviderId;\n        readonly voiceId: string;\n    };\n}',
+  },
+  {
+    name: 'SynthesisSpec',
+    declaration: 'export interface SynthesisSpec {\n    readonly providerId: SynthesisProviderId;\n    readonly provider: SynthesisProvider;\n    readonly input: SynthesisInput;\n}',
+  },
+  {
+    name: 'SynthesisVoice',
+    declaration: 'export interface SynthesisVoice {\n    readonly id: string;\n    readonly name: string;\n}',
   },
   {
     name: 'SystemMessage',

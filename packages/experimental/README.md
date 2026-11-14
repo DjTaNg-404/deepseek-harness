@@ -61,10 +61,16 @@ Promotion requires a named product role, documented public behavior and limitati
 | [`translator`](translator/README.md) | Anonymous Google and Bing text translation | `ctx.translator` |
 | [`client-ui-cot-translation`](client-ui-cot-translation/README.md) | Expanded reasoning translation and original-text controls | `ctx.cotTranslation` |
 | [`cot-translation-bundle`](cot-translation-bundle/README.md) | Default-disabled reasoning translation composition | — |
+| [`speech-deepseek-key`](speech-deepseek-key/README.md) | Shared DeepSeek credential resolution for the speech providers | — |
+| [`speech-synthesis`](speech-synthesis/README.md) | Named speech synthesis providers | `ctx.speechSynthesis` |
+| [`speech-synthesis-deepseek`](speech-synthesis-deepseek/README.md) | DeepSeek cloud speech synthesis | — |
 | [`speech-to-text`](speech-to-text/README.md) | Named speech recognition providers | `ctx.speechToText` |
 | [`speech-to-text-sensevoice`](speech-to-text-sensevoice/README.md) | Managed local SenseVoice inference | — |
+| [`speech-to-text-deepseek`](speech-to-text-deepseek/README.md) | DeepSeek cloud recognition through the speech seam | — |
+| [`speech-to-text-auto`](speech-to-text-auto/README.md) | Routing recognizer between local and cloud providers | — |
 | [`api-speech-to-text`](api-speech-to-text/README.md) | Authenticated transient transcription Remote | `ctx.speechController` |
 | [`client-ui-voice-input`](client-ui-voice-input/README.md) | Microphone capture and guarded draft insertion | — |
+| [`client-ui-read-aloud`](client-ui-read-aloud/README.md) | Read-aloud control for finalized answers | — |
 | [`plugin-market-bundle`](plugin-market-bundle/README.md) | Default-disabled optional custom plugin indexes: the index service and the Discover tab | — |
 | [`liveshare`](liveshare/README.md) | Opt-in LiveShare host bundle: Relay-backed Session sharing at the `view` or `write` tier, with forking and attachment uploads as independent switches | injects `connection`; serves the viewer page through the Host's web resources |
 | [`liveshare-protocol`](liveshare-protocol/README.md) | Wire frames and the identity contract shared by the owner bundle and the Relay | library and protocol — no ctx key |

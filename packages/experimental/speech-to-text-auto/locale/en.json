@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Automatic speech routing",
+    "description": "Routes each recording to the local or cloud recognizer."
+  }
+}

@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This optional bundle composes a speech Service Definition, local SenseVoice provider, authenticated Remote and browser microphone control. Shipped profiles leave it disabled.
+This optional bundle composes the speech recognition and synthesis Services, two recognizers (managed local SenseVoice and DeepSeek cloud recognition) plus a routing recognizer, a DeepSeek cloud synthesizer, the authenticated Remote, the browser microphone control, and a read-aloud control for finished answers. Shipped profiles leave it disabled.
 
 ## Table of Contents
 
@@ -25,7 +25,7 @@ This optional bundle composes a speech Service Definition, local SenseVoice prov
 <a id="use-this-package"></a>
 ## Use this package
 
-Open Plugins in the Web sidebar and enable Voice Input, marked by a blue waveform icon. If models need preparation, a dialog offers Go to setup or Later; Go to setup opens the bundle details. Complete caches need no setup prompt. In the details, choose Download and prepare; the collapsed current-step summary expands to the complete step list. Downloads report actual bytes; verification and loading show elapsed time. Once ready, click the microphone between the model selector and Send, then Stop to insert a transcript. Bundle details store the recognizer and language through the Settings service. Disabling the bundle cancels active work; cached assets remain on disk.
+Open Plugins in the Web sidebar and enable Voice Input, marked by a blue waveform icon. If models need preparation, a dialog offers Go to setup or Later; Go to setup opens the bundle details. Complete caches need no setup prompt. In the details, choose Download and prepare; the collapsed current-step summary expands to the complete step list. Downloads report actual bytes; verification and loading show elapsed time. Once ready, click the microphone between the model selector and Send, then Stop to insert a transcript. Bundle details store the recognizer and language through the Settings service. The recognizer choice starts at the local `sensevoice-local` model; selecting `DeepSeek ASR (cloud)` needs no download but uploads each recording and requires the configured DeepSeek credential, while `Automatic routing` picks between them per recording. Finished answers gain a speaker control that reads them aloud through the cloud synthesizer. Disabling the bundle cancels active work; cached assets remain on disk.
 
 -----
 

@@ -8412,6 +8412,9 @@ importers:
       '@deepseek-ai/cordis':
         specifier: workspace:~
         version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-experimental-speech-synthesis':
+        specifier: workspace:*
+        version: link:../speech-synthesis
       '@deepseek-ai/dsh-experimental-speech-to-text':
         specifier: workspace:*
         version: link:../speech-to-text
@@ -9309,6 +9312,39 @@ importers:
       zod:
         specifier: 4.4.3
         version: 4.4.3
+
+  packages/experimental/client-ui-read-aloud:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:~
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-api-remotes':
+        specifier: workspace:*
+        version: link:../../api/remotes
+      '@deepseek-ai/dsh-client-locale':
+        specifier: workspace:*
+        version: link:../../client/locale
+      '@deepseek-ai/dsh-client-store':
+        specifier: workspace:*
+        version: link:../../client/store
+      '@deepseek-ai/dsh-client-ui-chat':
+        specifier: workspace:*
+        version: link:../../client/ui-chat
+      '@deepseek-ai/dsh-client-ui-conversation':
+        specifier: workspace:*
+        version: link:../../client/ui-conversation
+      '@deepseek-ai/dsh-client-ui-renderer':
+        specifier: workspace:*
+        version: link:../../client/ui-renderer
+      '@deepseek-ai/dsh-client-ui-slots':
+        specifier: workspace:*
+        version: link:../../client/ui-slots
+      '@deepseek-ai/dsh-experimental-api-speech-to-text':
+        specifier: workspace:*
+        version: link:../api-speech-to-text
+      react:
+        specifier: ^18.2.0
+        version: 18.3.1
 
   packages/experimental/client-ui-stats:
     devDependencies:
@@ -10911,6 +10947,51 @@ importers:
         specifier: workspace:*
         version: link:../../skill/skill
 
+  packages/experimental/speech-deepseek-key:
+    dependencies:
+      '@deepseek-ai/dsh-credentials':
+        specifier: workspace:*
+        version: link:../../credentials/credentials
+      '@deepseek-ai/dsh-launch-environment':
+        specifier: workspace:*
+        version: link:../../util/launch-environment
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:~
+        version: link:../../../vendor/cordis
+
+  packages/experimental/speech-synthesis:
+    dependencies:
+      '@deepseek-ai/dsh-brand':
+        specifier: workspace:*
+        version: link:../../util/brand
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:~
+        version: link:../../../vendor/cordis
+
+  packages/experimental/speech-synthesis-deepseek:
+    dependencies:
+      '@deepseek-ai/dsh-experimental-speech-deepseek-key':
+        specifier: workspace:*
+        version: link:../speech-deepseek-key
+      '@deepseek-ai/dsh-timeout':
+        specifier: workspace:*
+        version: link:../../util/timeout
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:~
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-experimental-speech-synthesis':
+        specifier: workspace:*
+        version: link:../speech-synthesis
+
   packages/experimental/speech-to-text:
     dependencies:
       '@deepseek-ai/dsh-brand':
@@ -10935,6 +11016,38 @@ importers:
       '@deepseek-ai/dsh-settings':
         specifier: workspace:*
         version: link:../../settings/settings
+
+  packages/experimental/speech-to-text-auto:
+    dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:~
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-experimental-speech-to-text':
+        specifier: workspace:*
+        version: link:../speech-to-text
+
+  packages/experimental/speech-to-text-deepseek:
+    dependencies:
+      '@deepseek-ai/dsh-experimental-speech-deepseek-key':
+        specifier: workspace:*
+        version: link:../speech-deepseek-key
+      '@deepseek-ai/dsh-timeout':
+        specifier: workspace:*
+        version: link:../../util/timeout
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:~
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-experimental-speech-to-text':
+        specifier: workspace:*
+        version: link:../speech-to-text
 
   packages/experimental/speech-to-text-sensevoice:
     dependencies:
@@ -11424,12 +11537,27 @@ importers:
       '@deepseek-ai/dsh-experimental-api-speech-to-text':
         specifier: workspace:*
         version: link:../api-speech-to-text
+      '@deepseek-ai/dsh-experimental-client-ui-read-aloud':
+        specifier: workspace:*
+        version: link:../client-ui-read-aloud
       '@deepseek-ai/dsh-experimental-client-ui-voice-input':
         specifier: workspace:*
         version: link:../client-ui-voice-input
+      '@deepseek-ai/dsh-experimental-speech-synthesis':
+        specifier: workspace:*
+        version: link:../speech-synthesis
+      '@deepseek-ai/dsh-experimental-speech-synthesis-deepseek':
+        specifier: workspace:*
+        version: link:../speech-synthesis-deepseek
       '@deepseek-ai/dsh-experimental-speech-to-text':
         specifier: workspace:*
         version: link:../speech-to-text
+      '@deepseek-ai/dsh-experimental-speech-to-text-auto':
+        specifier: workspace:*
+        version: link:../speech-to-text-auto
+      '@deepseek-ai/dsh-experimental-speech-to-text-deepseek':
+        specifier: workspace:*
+        version: link:../speech-to-text-deepseek
       '@deepseek-ai/dsh-experimental-speech-to-text-sensevoice':
         specifier: workspace:*
         version: link:../speech-to-text-sensevoice

@@ -1,0 +1,37 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/speech-to-text-deepseek/README.md
+/:
+  en: 208f7a3b2259593e
+  zh: cbbb1ad1760bb9a0
+/deepseek-ai-dsh-experimental-speech-to-text-deepseek:
+  en: e68ff6f019ee7769
+  zh: 5ba2a0aad45bc6bc
+/deepseek-ai-dsh-experimental-speech-to-text-deepseek/summary:
+  en: 8616c63b037a6ad0
+  zh: f8e958d2b908064d
+/deepseek-ai-dsh-experimental-speech-to-text-deepseek/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 364c80ee00a374ff
+/deepseek-ai-dsh-experimental-speech-to-text-deepseek/use-this-package:
+  en: 68b49a441a3dda53
+  zh: 470598a9ac3e7260
+/deepseek-ai-dsh-experimental-speech-to-text-deepseek/understand-the-implementation:
+  en: e8767f6bbd9ef12f
+  zh: a9e3cc0939cab762
+/deepseek-ai-dsh-experimental-speech-to-text-deepseek/further-exploration:
+  en: 5c64426add9d79d6
+  zh: 4e06aa2ead8d2ccd
+/deepseek-ai-dsh-experimental-speech-to-text-deepseek/model-experience:
+  en: 162936b4fd0203e8
+  zh: 6f0da354dd795308
+/deepseek-ai-dsh-experimental-speech-to-text-deepseek/model-experience/kv-cache-effect:
+  en: b5ec79db2e1d0dbc
+  zh: e5aff567ae5ee6fc
+/deepseek-ai-dsh-experimental-speech-to-text-deepseek/known-limitations-and-deferred-work:
+  en: c996f070a00633e1
+  zh: 64b154aa6ad1636b
+/deepseek-ai-dsh-experimental-speech-to-text-deepseek/known-limitations-and-deferred-work/dev-note:
+  en: 5feacbeb8ea10215
+  zh: f052a23fbab3a10d

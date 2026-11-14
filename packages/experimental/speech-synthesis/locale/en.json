@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Speech synthesis",
+    "description": "Named speech synthesis providers behind one service."
+  }
+}

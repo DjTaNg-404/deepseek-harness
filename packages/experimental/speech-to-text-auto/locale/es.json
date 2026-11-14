@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Enrutamiento de voz automático",
+    "description": "Dirige cada grabación al reconocedor local o en la nube."
+  }
+}

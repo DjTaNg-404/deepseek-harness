@@ -394,6 +394,12 @@ export default defineConfig({
         'packages/client/ui-input-trigger/src/core/detect.ts',
         'packages/client/ui-sidebar/src/client/index.ts',
         'packages/client/ui-skill/src/client/index.ts',
+        // Read-aloud browser shell: its playback logic is covered by
+        // tests/playback.client.spec.ts, while the React/slot shell needs the
+        // same client test lane as the entries above (TODO(gui)).
+        'packages/experimental/client-ui-read-aloud/src/client/index.ts',
+        'packages/experimental/client-ui-read-aloud/src/client/ReadAloudAction.tsx',
+        'packages/experimental/client-ui-read-aloud/src/client/locales.ts',
         'packages/client/ui-workspace/src/client/index.ts',
         'packages/test-support/client-runtime/src/translate.ts',
         'packages/client/ui-primitives/src/JsonTree.tsx',

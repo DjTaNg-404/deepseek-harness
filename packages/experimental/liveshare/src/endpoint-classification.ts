@@ -170,6 +170,7 @@ export const VIEWER_ENDPOINT_CLASSES = {
   'speech/follow': 'owner-only', // owner voice input
   'speech/prepare': 'owner-only', // owner voice input
   'speech/transcribe': 'owner-only', // owner voice input
+  'speech/synthesize': 'owner-only', // owner read-aloud UI
   'claudeCodeMods/pressBand': 'owner-only', // owner Claude Code mods UI
   'claudeCodeMods/watchBand': 'owner-only', // owner Claude Code mods UI
   'cotTranslation/limits': 'owner-only', // owner chain-of-thought translation UI
