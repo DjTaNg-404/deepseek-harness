@@ -113,11 +113,6 @@ export interface ModelCatalogModel {
   readonly reasoning?: ModelReasoning
   /** Provider-authored label shown beside the name; display data only. */
   readonly badge?: LlmModelBadge
-  /**
-   * Whether this model can emit structured tool calls. Absent means capable,
-   * so only a withheld capability is advertised and the selector labels it.
-   */
-  readonly supportsTools?: boolean
 }
 
 /** One provider and its successfully loaded model catalog. */
@@ -190,13 +185,6 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'session/provider-credentials-unavailable': Record<string, never>
     'session/provider-models-unavailable': { readonly provider: string }
     'session/model-unavailable': { readonly provider: string; readonly model: string }
-    /** The requested model cannot call tools and the Session already has tool calls; resend with `acceptToolContract`. */
-    'session/tool-contract-confirmation-required': {
-      readonly provider: string
-      readonly model: string
-      /** Tool calls already recorded in the Session, which the downgrade replays as plain text. */
-      readonly toolCalls: number
-    }
     'session/conflict': {
       readonly sessionId: SessionId
       readonly requestedCwd: string
@@ -297,16 +285,6 @@ export interface SessionCreateValue {
 /** Session model-selection request. */
 export interface SessionSelectModelRequest extends ModelSelection {
   readonly sessionId: SessionId
-  /**
-   * Accept the downgrade a chat-only model implies.
-   *
-   * A model whose route withholds tools receives no tool schemas, and this
-   * Session's earlier tool calls replay as plain text. The Host refuses such a
-   * switch on a Session that already recorded tool calls unless the caller
-   * says so, which is what makes the confirmation a contract and not a UI
-   * courtesy: an RPC caller cannot skip it by accident.
-   */
-  readonly acceptToolContract?: boolean
 }
 
 /** Accepted model selection after Host resolution. */

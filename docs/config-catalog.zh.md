@@ -1954,7 +1954,7 @@ export interface Config extends ProtocolConfig, ModelListingConfig {
 
 - `inject`: `llm`
 - `refs`: `Api` (`@earendil-works/pi-ai`) · `CacheRetention` (`@earendil-works/pi-ai`) · `Model` (`@earendil-works/pi-ai`) · `ModelThinkingLevel` (`@earendil-works/pi-ai`) · `OpenAICompletionsCompat` (`@earendil-works/pi-ai`) · [`RetryPolicyConfig`](../packages/llm/llm/src/index.ts) · `ThinkingBudgets` (`@earendil-works/pi-ai`) · `Transport` (`@earendil-works/pi-ai`) · `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/llm/llm-pi-ai/src/config.ts:269`](../packages/llm/llm-pi-ai/src/config.ts)
+- `source`: [`packages/llm/llm-pi-ai/src/config.ts:251`](../packages/llm/llm-pi-ai/src/config.ts)
 
 ```ts config-catalog
 /** Plugin configuration: the provider routes this instance owns. */
@@ -2027,18 +2027,6 @@ export interface PiAiProviderProfile {
    * to answer instead.
    */
   defaultInput?: PiAiModality[]
-  /**
-   * Tool capability for every model on this route that declares none of its
-   * own (default `true`). A gateway that terminates the agent loop on its own
-   * side declares `false` once here instead of on every entry: its models
-   * accept `tools` and ignore them, so the harness sends none and drops the
-   * prompt's tool section too.
-   *
-   * Like `defaultInput` this is a fallback, not an override — an entry's own
-   * `supportsTools` wins — but unlike `defaultInput` the default is the capable
-   * answer, because withholding tools is the exception a deployment opts into.
-   */
-  defaultSupportsTools?: boolean
   /** Provider request headers, validated against Fetch when the profile resolves; Harness attribution wins reserved names. */
   headers?: Record<string, string>
   /** Provider-neutral pi-ai reasoning level. */
@@ -2112,20 +2100,6 @@ export interface PiAiModelProfile {
    * mid-turn.
    */
   input?: PiAiModality[]
-  /**
-   * Whether this model can emit structured tool calls. Absent keeps the
-   * route's {@link RouteCatalogRequest.defaultSupportsTools}, which is itself
-   * `true`; `false` declares a model that cannot call tools, which downgrades
-   * its requests to plain conversation — no tool schemas on the wire and no
-   * tool section in the prompt. That is what a gateway terminating the agent
-   * loop on its own side needs: it accepts `tools` and ignores them, so
-   * sending them only invites the model to narrate calls nothing executes.
-   *
-   * Absence means capable here, unlike {@link input} where absence means "ask
-   * the next layer". Downgrading is the exception, so an undeclared route must
-   * keep the behavior it has always had.
-   */
-  supportsTools?: boolean
   /**
    * Selectable reasoning efforts. Absent inherits the installed catalog
    * entry's capability (a hand-declared model has none and does not reason);

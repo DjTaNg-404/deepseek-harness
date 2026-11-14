@@ -628,20 +628,6 @@ export interface PiAiModelProfile {
    */
   input?: PiAiModality[]
   /**
-   * Whether this model can emit structured tool calls. Absent keeps the
-   * route's {@link RouteCatalogRequest.defaultSupportsTools}, which is itself
-   * `true`; `false` declares a model that cannot call tools, which downgrades
-   * its requests to plain conversation — no tool schemas on the wire and no
-   * tool section in the prompt. That is what a gateway terminating the agent
-   * loop on its own side needs: it accepts `tools` and ignores them, so
-   * sending them only invites the model to narrate calls nothing executes.
-   *
-   * Absence means capable here, unlike {@link input} where absence means "ask
-   * the next layer". Downgrading is the exception, so an undeclared route must
-   * keep the behavior it has always had.
-   */
-  supportsTools?: boolean
-  /**
    * Selectable reasoning efforts. Absent inherits the installed catalog
    * entry's capability (a hand-declared model has none and does not reason);
    * `false` declares a non-reasoning model, which is how a profile strips
@@ -682,12 +668,6 @@ export interface RouteCatalogRequest {
   defaultMaxTokens: number
   /** Modalities for a model neither the entry nor the catalog declares. */
   defaultInput: Model<Api>['input']
-  /**
-   * Tool capability for a model whose entry declares none. Absent means
-   * capable, so a route that never mentions tools keeps the behavior it had
-   * before this field existed.
-   */
-  defaultSupportsTools?: boolean
 }
 
 /** An expected configuration failure that stored-catalog reads may retain for repair. */
@@ -864,14 +844,6 @@ export interface RouteCatalog {
    * picked, so only an explicit configuration lands here.
    */
   configuredMaxTokens: ReadonlyMap<string, number>
-  /**
-   * Models whose tool capability the profile explicitly withheld, by model id.
-   *
-   * Only `false` is stored, because absence is the capable default: a map of
-   * every model's answer would grow with the installed catalog while telling
-   * callers nothing they did not already assume.
-   */
-  supportsTools: ReadonlyMap<string, boolean>
 }
 
 /**
@@ -937,7 +909,6 @@ export function resolveRouteModels(
   assertOfferedCompatFields(provider, 'route', request.compat)
   const seen = new Set<string>()
   const configuredMaxTokens = new Map<string, number>()
-  const toolIncapable = new Map<string, boolean>()
   const resolveEntry = (entry: PiAiModelProfile): Model<Api> => {
     assertOfferedCompatFields(provider, `model "${entry.id}"`, entry.compat)
     if (entry.id.length === 0) invalid(provider, 'has a model with an empty id')
@@ -968,12 +939,6 @@ export function resolveRouteModels(
     // Only a value the profile named is a deployment choice; the catalog's is
     // the model's capability and stays out of request defaults.
     if (entry.maxTokens !== undefined) configuredMaxTokens.set(entry.id, entry.maxTokens)
-    // An entry answers for itself first, then the route does; only a withheld
-    // capability is worth recording, because absence already means capable.
-    const supportsTools = entry.supportsTools ?? request.defaultSupportsTools ?? true
-    if (!supportsTools) {
-      toolIncapable.set(entry.id, false)
-    }
     return {
       // The installed entry lays the floor, and the fields below override it.
       // Enumerating instead would silently drop every `Model` field this
@@ -1018,5 +983,5 @@ export function resolveRouteModels(
     invalid(provider, `sets compat "${field}", but no model on the route speaks a protocol that takes it;`
       + ` it exists on ${takers.join(', ')}`)
   }
-  return { models: serviceableModels, configuredMaxTokens, supportsTools: toolIncapable, modelErrors }
+  return { models: serviceableModels, configuredMaxTokens, modelErrors }
 }

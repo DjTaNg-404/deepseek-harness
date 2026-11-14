@@ -14,7 +14,6 @@ import {
 } from '@deepseek-ai/dsh-llm'
 import type {
   ContentBlock,
-  GenerateOptions,
   LlmResolvedModelInfo,
   Message,
   RequestMessage,
@@ -23,7 +22,6 @@ import type {
 } from '@deepseek-ai/dsh-llm'
 import SessionStore, { buildForkSeed, Session, SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
-import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import LlmRuntime from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import TokenMeter from '@deepseek-ai/dsh-token-meter'
@@ -77,11 +75,6 @@ class GatedCompactionEngine extends BasicCompactionEngine {
 /** One text answer per request, with a context window large enough to avoid pressure. */
 class TextAdapter extends LlmAdapter {
   readonly requests: RequestMessage[][] = []
-  readonly options: GenerateOptions[] = []
-
-  constructor(private readonly supportsTools?: boolean) {
-    super()
-  }
 
   override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
     return Promise.resolve({
@@ -89,12 +82,10 @@ class TextAdapter extends LlmAdapter {
       id: model,
       name: model,
       context: { contextWindow: 100_000 },
-      ...this.supportsTools === undefined ? {} : { supportsTools: this.supportsTools },
     })
   }
 
-  override async * stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
-    this.options.push(options)
+  override async * stream(options: { messages: readonly RequestMessage[] }): AsyncIterable<StreamChunk> {
     this.requests.push([...options.messages])
     yield { type: 'block-start', index: 0, blockType: 'text' }
     yield { type: 'block-end', index: 0, block: { type: 'text', text: 'answer' } }
@@ -111,13 +102,13 @@ interface LoopHarness {
 }
 
 /** Real loop and session store around manual compaction. */
-async function loopHarness(supportsTools?: boolean): Promise<LoopHarness> {
+async function loopHarness(): Promise<LoopHarness> {
   const ctx = new Context()
   await mountAgentLoopTestDependencies(ctx)
   ctx.sessions.registerMessageProjection(imageOffloadProjection)
   await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(TokenMeter)
-  const adapter = new TextAdapter(supportsTools)
+  const adapter = new TextAdapter()
   ctx.llm.registerAdapter([MODEL], adapter)
   const compact = new GatedCompactionEngine(ctx, { auto: false })
   const agent = await ctx.agentLoop.create(SessionId('manual-compact'), { provider: MODEL, model: MODEL })
@@ -248,34 +239,6 @@ function compactEvents(session: Session): SessionEvent[] {
 }
 
 describe('compactNow through the real loop', () => {
-  it('summarizes a conversation whose model withholds tools, without sending them', async () => {
-    // The summarizer calls `ctx.llm.stream` directly, so withholding tools from
-    // the turn must not take compaction down with it. Register a tool with a
-    // recognizable description to prove both the wire tools and the prompt
-    // section are gone for this model.
-    const harness = await loopHarness(false)
-    const { ctx, agent, compact, adapter } = harness
-    ctx.tools.register(defineContentToolFixture({
-      name: 'probe_tool',
-      description: 'UNIQUE_TOOL_DESCRIPTION',
-      parameters: {},
-      async execute() { return [{ type: 'text', text: 'probe' }] },
-    }))
-    try {
-      await seedHistory(harness)
-      const first = adapter.options[0]
-      expect(first?.messages[0]?.role).toBe('system')
-      expect(JSON.stringify(first?.messages[0])).not.toContain('UNIQUE_TOOL_DESCRIPTION')
-      expect(first?.tools ?? []).toEqual([])
-
-      expect(await compact.compactNow(agent, SIGNAL)).not.toBeNull()
-      expect(compact.calls).toHaveLength(1)
-      expect(agent.session.snapshotEvents().filter(event => event.type === 'compaction/summary')).toHaveLength(1)
-    } finally {
-      await ctx.fiber.dispose()
-    }
-  })
-
   it('passes logged image omissions to the summarizer without changing the original message', async () => {
     const { ctx, agent, compact } = await loopHarness()
     try {

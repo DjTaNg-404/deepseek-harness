@@ -147,27 +147,6 @@
   color: var(--dsw-alias-state-warn-label);
 }
 
-/* In-place answer to a chat-only model that would flatten recorded tool calls.
-   Stacked rather than a row: the sentence wraps, the two actions stay right. */
-.confirmation {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-bottom: 3px;
-  padding: 6px 7px;
-  border-radius: 6px;
-  background: var(--dsw-alias-bg-module-platform);
-  color: var(--dsw-alias-state-warn-label);
-  font-size: 11px;
-  line-height: 16px;
-}
-
-.confirmationActions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 6px;
-}
-
 .retry {
   flex: 0 0 auto;
   padding: 0;
@@ -177,12 +156,6 @@
   font: inherit;
   font-weight: 600;
   cursor: pointer;
-}
-
-/* Declining is the safe answer, so it reads quieter than accepting. */
-.dismiss {
-  font-weight: 400;
-  color: var(--dsw-alias-label-secondary);
 }
 
 .searchRow {

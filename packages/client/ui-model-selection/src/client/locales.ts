@@ -33,11 +33,6 @@ export const zh = {
   'search.empty': '没有匹配的模型。',
   'empty.models': '暂无可用模型',
   'empty.efforts': '当前模型未提供推理等级。',
-  'tag.noTools': '无工具',
-  'error.toolContract': '{model} 不支持工具调用，请在输入框旁的模型选择器中确认切换',
-  'confirm.toolsUnavailable': '{model} 不支持工具调用。切换后，本会话已有 {count} 次工具调用将作为纯文本继续，且不再执行新工具。',
-  'confirm.accept': '仍然切换',
-  'confirm.cancel': '取消',
 } satisfies Record<string, string>
 
 /** The model namespace key union. */
@@ -68,11 +63,6 @@ export const en = {
   'search.empty': 'No matching models.',
   'empty.models': 'No models available.',
   'empty.efforts': 'This model provides no reasoning effort levels.',
-  'tag.noTools': 'No tools',
-  'error.toolContract': '{model} cannot call tools; confirm the switch in the model selector beside the composer',
-  'confirm.toolsUnavailable': '{model} cannot call tools. After switching, the {count} tool call(s) already recorded in this conversation continue as plain text and no new tools run.',
-  'confirm.accept': 'Switch anyway',
-  'confirm.cancel': 'Cancel',
 } satisfies Record<ModelKey, string>
 
 /** Japanese copy, checked against the English keys. */
@@ -100,11 +90,6 @@ export const ja = {
   'search.empty': '一致するモデルがありません。',
   'empty.models': '利用可能なモデルがありません。',
   'empty.efforts': 'このモデルには推論強度の設定がありません。',
-  'tag.noTools': 'ツールなし',
-  'error.toolContract': '{model} はツールを呼び出せません。入力欄のモデル選択で切り替えを確認してください',
-  'confirm.toolsUnavailable': '{model} はツールを呼び出せません。切り替えると、この会話で記録済みの {count} 件のツール呼び出しはプレーンテキストとして扱われ、新しいツールは実行されません。',
-  'confirm.accept': 'それでも切り替える',
-  'confirm.cancel': 'キャンセル',
 } satisfies Record<keyof typeof en, string>
 
 /** Spanish dictionary, checked against the English keys. */
@@ -132,11 +117,6 @@ export const es = {
   'search.empty': 'No hay modelos coincidentes.',
   'empty.models': 'No hay modelos disponibles.',
   'empty.efforts': 'Este modelo no proporciona niveles de esfuerzo de razonamiento.',
-  'tag.noTools': 'Sin herramientas',
-  'error.toolContract': '{model} no puede llamar herramientas; confirma el cambio en el selector de modelos junto al cuadro de texto',
-  'confirm.toolsUnavailable': '{model} no puede llamar herramientas. Tras el cambio, las {count} llamadas a herramientas ya registradas en esta conversación continuarán como texto plano y no se ejecutará ninguna herramienta nueva.',
-  'confirm.accept': 'Cambiar de todos modos',
-  'confirm.cancel': 'Cancelar',
 } satisfies Record<keyof typeof en, string>
 
 /** French dictionary, checked against the English keys. */
@@ -164,11 +144,6 @@ export const fr = {
   'search.empty': 'Aucun modèle correspondant.',
   'empty.models': 'Aucun modèle disponible.',
   'empty.efforts': 'Ce modèle ne fournit aucun niveau d’effort de raisonnement.',
-  'tag.noTools': 'Sans outils',
-  'error.toolContract': '{model} ne peut pas appeler d’outils ; confirmez le changement dans le sélecteur de modèle près de la zone de saisie',
-  'confirm.toolsUnavailable': '{model} ne peut pas appeler d’outils. Après le changement, les {count} appels d’outils déjà enregistrés dans cette conversation seront traités comme du texte brut et aucun nouvel outil ne s’exécutera.',
-  'confirm.accept': 'Changer quand même',
-  'confirm.cancel': 'Annuler',
 } satisfies Record<keyof typeof en, string>
 
 /** German dictionary, checked against the English keys. */
@@ -196,11 +171,6 @@ export const de = {
   'search.empty': 'Keine passenden Modelle.',
   'empty.models': 'Keine Modelle verfügbar.',
   'empty.efforts': 'Dieses Modell liefert keine Argumentationsaufwandsstufen.',
-  'tag.noTools': 'Ohne Werkzeuge',
-  'error.toolContract': '{model} kann keine Werkzeuge aufrufen; bestätigen Sie den Wechsel im Modellauswahlfeld neben der Eingabe',
-  'confirm.toolsUnavailable': '{model} kann keine Werkzeuge aufrufen. Nach dem Wechsel werden die {count} bereits aufgezeichneten Werkzeugaufrufe dieser Unterhaltung als reiner Text fortgeführt und keine neuen Werkzeuge ausgeführt.',
-  'confirm.accept': 'Trotzdem wechseln',
-  'confirm.cancel': 'Abbrechen',
 } satisfies Record<keyof typeof en, string>
 
 /** Russian dictionary, checked against the English keys. */
@@ -228,11 +198,6 @@ export const ru = {
   'search.empty': 'Нет подходящих моделей.',
   'empty.models': 'Нет доступных моделей.',
   'empty.efforts': 'Эта модель не обеспечивает обоснования уровней усилий.',
-  'tag.noTools': 'Без инструментов',
-  'error.toolContract': '{model} не может вызывать инструменты; подтвердите переключение в выборе модели рядом с полем ввода',
-  'confirm.toolsUnavailable': '{model} не может вызывать инструменты. После переключения {count} уже записанных вызовов инструментов в этом разговоре останутся обычным текстом, а новые инструменты выполняться не будут.',
-  'confirm.accept': 'Всё равно переключить',
-  'confirm.cancel': 'Отмена',
 } satisfies Record<keyof typeof en, string>
 
 /** Portuguese dictionary, checked against the English keys. */
@@ -260,9 +225,4 @@ export const pt = {
   'search.empty': 'Não há modelos correspondentes.',
   'empty.models': 'Nenhum modelo disponível.',
   'empty.efforts': 'Este modelo não fornece níveis de esforço de raciocínio.',
-  'tag.noTools': 'Sem ferramentas',
-  'error.toolContract': '{model} não pode chamar ferramentas; confirme a troca no seletor de modelos ao lado da caixa de texto',
-  'confirm.toolsUnavailable': '{model} não pode chamar ferramentas. Após a troca, as {count} chamadas de ferramentas já registradas nesta conversa continuarão como texto simples e nenhuma ferramenta nova será executada.',
-  'confirm.accept': 'Trocar mesmo assim',
-  'confirm.cancel': 'Cancelar',
 } satisfies Record<keyof typeof en, string>

@@ -349,9 +349,6 @@ export class PiAiAdapter extends LlmAdapter {
         id: model.id,
         name: model.name,
         inputModalities: [...model.input],
-        // Only a withheld capability is advertised; absence already means the
-        // model can call tools, so every existing route stays byte-identical.
-        ...profile.supportsTools.get(model.id) === false ? { supportsTools: false } : {},
       }))
     })
   }
@@ -379,7 +376,6 @@ export class PiAiAdapter extends LlmAdapter {
       id: model,
       name: resolvedModel.name,
       inputModalities: [...resolvedModel.input],
-      ...profile.supportsTools.get(model) === false ? { supportsTools: false } : {},
       context: { contextWindow: resolvedModel.contextWindow },
       ...configuredMaxTokens === undefined ? {} : { defaultMaxTokens: configuredMaxTokens },
       ...reasoningInfo(resolvedModel, defaultLevel),

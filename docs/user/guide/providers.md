@@ -116,27 +116,6 @@ In pi-ai configuration, every list must name at least one modality except a mode
 
 Both fields state a claim about your endpoint rather than checking it. A model that declares images its endpoint does not serve is not caught here; the provider rejects the request instead.
 
-### Tool capability
-
-A model reached through an OpenAI-compatible bridge can accept `tools` and ignore them, because the bridge runs the agent loop on its own side. Such a model never emits tool calls, so send it no tool schemas and no tool section in the system prompt: otherwise it narrates calls nothing executes, and every replayed tool call in the conversation is paid for as plain text.
-
-Declare that once on the route:
-
-```yaml
-- id: llm-pi-ai
-  config:
-    providers:
-      bridge:
-        apiKeyEnv: BRIDGE_API_KEY
-        api: openai-completions
-        baseURL: https://bridge.example/v1
-        defaultSupportsTools: false
-        models:
-          - id: bridge-chat
-```
-
-`supportsTools: false` withholds tools from one model alone, and an explicit `supportsTools: true` wins back a route-wide `false`. The field defaults to `true`, so a route that does not declare it behaves exactly as before. The model selector labels a model that cannot call tools, and switching to one in a conversation that already ran tools asks for confirmation first; once switched, requests carry no `tools` and the prompt carries no tool section.
-
 ### DeepSeek account models
 
 A signed-in DeepSeek account lists its models from the account service, so the Models page offers no model editor for it. Adjust a single model with `modelOverrides` in `$DSH_HOME/profiles/<profile>/cordis.patch.yml`; the fields match a DeepSeek `models` entry, and unset fields keep the listed values:

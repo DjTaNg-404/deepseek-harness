@@ -382,16 +382,6 @@ export interface LlmModelInfo {
    * omits it, and no model request or Session event carries it.
    */
   badge?: LlmModelBadge
-  /**
-   * Whether this model can emit structured tool calls.
-   *
-   * Absent means capable — deliberately unlike {@link inputModalities}, where
-   * absence means unknown. This field gates a downgrade: a model without tools
-   * receives no tool schemas and its prompt carries no tool section, so
-   * treating an absent value as incapable would silently strip tools from every
-   * existing route that never declared the field.
-   */
-  supportsTools?: boolean
 }
 
 /** Provider-owned context capacity for one exact provider/model route. */

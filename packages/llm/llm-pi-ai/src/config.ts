@@ -161,18 +161,6 @@ export interface PiAiProviderProfile {
    * to answer instead.
    */
   defaultInput?: PiAiModality[]
-  /**
-   * Tool capability for every model on this route that declares none of its
-   * own (default `true`). A gateway that terminates the agent loop on its own
-   * side declares `false` once here instead of on every entry: its models
-   * accept `tools` and ignore them, so the harness sends none and drops the
-   * prompt's tool section too.
-   *
-   * Like `defaultInput` this is a fallback, not an override — an entry's own
-   * `supportsTools` wins — but unlike `defaultInput` the default is the capable
-   * answer, because withholding tools is the exception a deployment opts into.
-   */
-  defaultSupportsTools?: boolean
   /** Provider request headers, validated against Fetch when the profile resolves; Harness attribution wins reserved names. */
   headers?: Record<string, string>
   /** Provider-neutral pi-ai reasoning level. */
@@ -257,12 +245,6 @@ export interface ResolvedPiAiProviderProfile
    * own, so a catalog capability must not appear here.
    */
   configuredMaxTokens: ReadonlyMap<string, number>
-  /**
-   * Models on this route whose tool capability the profile withheld, by model
-   * id. Only `false` appears here; an absent id is a capable model, so a
-   * deployment that never declares the field sees an empty map.
-   */
-  supportsTools: ReadonlyMap<string, boolean>
 }
 
 /** Plugin configuration: the provider routes this instance owns. */
@@ -359,9 +341,6 @@ const modelFields = {
   // `{}`, and absent must stay distinguishable — it means "inherit the
   // installed catalog's capability", while `false` disables reasoning.
   reasoningEfforts: z.union([z.const(false), reasoningEfforts]),
-  // No default: absent must stay distinguishable, because it defers to the
-  // route's answer while `false` withholds tools from this one model.
-  supportsTools: z.boolean(),
   compat: compatProfile,
 }
 
@@ -384,7 +363,6 @@ const profile = z.object({
   defaultContextWindow: z.number().step(1).min(1).default(DEFAULT_CONTEXT_WINDOW),
   defaultMaxTokens: z.number().step(1).min(1).default(DEFAULT_MAX_TOKENS),
   defaultInput: z.array(z.union(MODALITIES)).default([...DEFAULT_INPUT]),
-  defaultSupportsTools: z.boolean().default(true),
   headers: z.dict(z.string()),
   reasoning: z.union(THINKING_LEVELS),
   thinkingBudgets,
@@ -534,7 +512,6 @@ export function resolveProfiles(
         defaultInput,
         defaultContextWindow: source.defaultContextWindow ?? DEFAULT_CONTEXT_WINDOW,
         defaultMaxTokens: source.defaultMaxTokens ?? DEFAULT_MAX_TOKENS,
-        defaultSupportsTools: source.defaultSupportsTools ?? true,
       }, validation)
       catalogError = catalog.modelErrors.values().next().value
       piProvider = buildProvider({
@@ -565,7 +542,6 @@ export function resolveProfiles(
       ...rest.headers === undefined ? {} : { headers: { ...rest.headers } },
       ...rest.thinkingBudgets === undefined ? {} : { thinkingBudgets: { ...rest.thinkingBudgets } },
       configuredMaxTokens: catalog?.configuredMaxTokens ?? new Map(),
-      supportsTools: catalog?.supportsTools ?? new Map(),
       modelErrors: catalog?.modelErrors ?? new Map(),
       ...piProvider === undefined ? {} : { piProvider },
       ...catalogError === undefined ? {} : { catalogError },

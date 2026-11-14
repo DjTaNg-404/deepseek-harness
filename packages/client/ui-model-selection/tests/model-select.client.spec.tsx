@@ -9,23 +9,9 @@ import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { ComponentProps } from 'react'
 import type { OwnerOf } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ModelDirectoryState } from '../src/client/directory.ts'
-import { ModelSelect as BaseModelSelect } from '../src/client/ModelSelect.tsx'
+import { ModelSelect } from '../src/client/ModelSelect.tsx'
 import { en, zh } from '../src/client/locales.ts'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
-
-// These cases mount a seat that never answers a tool-contract prompt, so the
-// two callbacks stay optional here and default to the do-nothing answer.
-type ModelSelectProps = ComponentProps<typeof BaseModelSelect>
-const ModelSelect = (
-  props: Omit<ModelSelectProps, 'acceptToolContract' | 'dismissConfirmation'>
-    & Partial<Pick<ModelSelectProps, 'acceptToolContract' | 'dismissConfirmation'>>,
-) => (
-  <BaseModelSelect
-    acceptToolContract={async () => ({ ok: true, value: undefined })}
-    dismissConfirmation={() => {}}
-    {...props}
-  />
-)
 
 // The seat's key domain is model ∪ common; the stub mirrors the real lookup
 // chain: package dictionary, then common vocabulary, then the key.
@@ -68,7 +54,6 @@ function state(overrides: Partial<ModelDirectoryState> = {}): ModelDirectoryStat
     failures: [],
     status: 'ready',
     pending: null,
-    confirmation: null,
     error: null,
     ...overrides,
   }
@@ -218,102 +203,6 @@ describe('ModelSelect catalog badges', () => {
     } })
     expect(screen.getByRole('button', { name: '选择模型，当前 DeepSeek-V4.1-Flash' }).textContent).toBe('DeepSeek-V4.1-Flash [info]')
     expect(screen.queryByText('新')).toBeNull()
-  })
-})
-
-describe('ModelSelect tool capability', () => {
-  const chatOnly = () => state({
-    current: { provider: 'deepseek-official', model: 'deepseek-chat' },
-    groups: [{
-      id: 'deepseek-official',
-      name: 'DeepSeek',
-      models: [
-        { id: 'deepseek-chat', name: 'DeepSeek Chat', supportsTools: false },
-        { id: 'deepseek-v4-pro', name: 'DeepSeek-V4-Pro' },
-      ],
-    }],
-  })
-
-  it('labels a chat-only model beside its name in the trigger and the list', () => {
-    render(<ModelSelect renderSlot={renderLabel} locked={false} available directory={createSnapshotStore(chatOnly())}
-      load={vi.fn()} resolveText={resolveText} select={vi.fn()} t={t} />)
-    const trigger = screen.getByRole('button', { name: '选择模型，当前 DeepSeek Chat' })
-    expect(trigger.textContent).toBe('无工具 DeepSeek Chat')
-    expect(screen.getByText('无工具').getAttribute('data-tone')).toBe('warning')
-    fireEvent.click(trigger)
-    fireEvent.click(screen.getByRole('menuitem', { name: /模型/ }))
-    expect(screen.getAllByRole('menuitemradio').map(row => row.textContent))
-      .toEqual(['DeepSeek Chat 无工具', 'DeepSeek-V4-Pro'])
-  })
-
-  it('asks in place before flattening recorded tool work and resubmits an accepted switch', async () => {
-    const directory = createSnapshotStore<ModelDirectoryState>(state({
-      current: { provider: 'deepseek-official', model: 'deepseek-v4-pro' },
-      groups: [{
-        id: 'deepseek-official',
-        name: 'DeepSeek',
-        models: [
-          { id: 'deepseek-v4-pro', name: 'DeepSeek-V4-Pro' },
-          { id: 'deepseek-chat', name: 'DeepSeek Chat', supportsTools: false },
-        ],
-      }],
-    }))
-    const confirm = (): void => {
-      act(() => {
-        directory.update((snapshot) => {
-          snapshot.confirmation = {
-            selection: { provider: 'deepseek-official', model: 'deepseek-chat' },
-            toolCalls: 2,
-          }
-        })
-      })
-    }
-    const acceptToolContract = vi.fn(async () => ({ ok: true as const, value: undefined }))
-    const dismissConfirmation = vi.fn()
-    render(<ModelSelect renderSlot={renderLabel} locked={false} available directory={directory}
-      load={vi.fn()} resolveText={resolveText} select={vi.fn()} t={t}
-      acceptToolContract={acceptToolContract} dismissConfirmation={dismissConfirmation} />)
-    fireEvent.click(screen.getByRole('button', { name: '选择模型，当前 DeepSeek-V4-Pro' }))
-    confirm()
-    expect(screen.getByRole('alert').textContent).toContain(
-      'DeepSeek Chat 不支持工具调用。切换后，本会话已有 2 次工具调用将作为纯文本继续，且不再执行新工具。',
-    )
-    fireEvent.click(screen.getByRole('button', { name: '取消' }))
-    expect(dismissConfirmation).toHaveBeenCalledTimes(1)
-    act(() => { directory.update((snapshot) => { snapshot.confirmation = null }) })
-    expect(screen.queryByRole('alert')).toBeNull()
-
-    confirm()
-    fireEvent.click(screen.getByRole('button', { name: '仍然切换' }))
-    await waitFor(() => { expect(acceptToolContract).toHaveBeenCalledTimes(1) })
-    // An accepted contract settles the switch, which closes the menu with it.
-    await waitFor(() => { expect(screen.queryByRole('alert')).toBeNull() })
-  })
-
-  it('leaves the contract refusal to the in-place strip instead of also toasting it', async () => {
-    const directory = createSnapshotStore(state({
-      groups: [{
-        id: 'deepseek-official',
-        name: 'DeepSeek',
-        models: [
-          { id: 'deepseek-v4-flash', name: 'DeepSeek-V4-Flash' },
-          { id: 'deepseek-chat', name: 'DeepSeek Chat', supportsTools: false },
-        ],
-      }],
-    }))
-    const select = vi.fn(async () => ({
-      ok: false as const,
-      error: new RemoteError('session/tool-contract-confirmation-required', 'needs acceptance', {
-        provider: 'deepseek-official', model: 'deepseek-chat', toolCalls: 2,
-      }),
-    }))
-    render(<ModelSelect renderSlot={renderLabel} locked={false} available directory={directory}
-      load={vi.fn()} resolveText={resolveText} select={select} t={t} />)
-    fireEvent.click(screen.getByRole('button', { name: '选择模型，当前 DeepSeek-V4-Flash' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: /模型/ }))
-    fireEvent.click(screen.getByRole('menuitemradio', { name: /DeepSeek Chat/ }))
-    await waitFor(() => { expect(select).toHaveBeenCalledTimes(1) })
-    expect(document.body.textContent).not.toContain('session/tool-contract-confirmation-required')
   })
 })
 

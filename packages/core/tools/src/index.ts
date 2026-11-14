@@ -266,23 +266,17 @@ export class ToolsService extends Service {
     signal.throwIfAborted()
     const view = this.view(agent)
     const admitted = new Map<string, ToolDefinition>()
-    // A route may withhold tools because the gateway runs the agent loop on its
-    // own side. Admission is where a step's tools are decided, so an empty set
-    // here also empties the model-facing schemas and the prompt's tool section:
-    // one gate instead of an adapter branch plus prompt surgery.
-    if (await this.modelAdmitsTools(context)) {
-      for (const [name, definition] of view.visible) {
-        const registration = view.registrations.get(name)
-        let enabled: boolean
-        try {
-          enabled = registration?.when === undefined || await registration.when(context)
-        } catch (cause: unknown) {
-          signal.throwIfAborted()
-          throw new ToolActivationError(name, cause)
-        }
+    for (const [name, definition] of view.visible) {
+      const registration = view.registrations.get(name)
+      let enabled: boolean
+      try {
+        enabled = registration?.when === undefined || await registration.when(context)
+      } catch (cause: unknown) {
         signal.throwIfAborted()
-        if (enabled) admitted.set(name, definition)
+        throw new ToolActivationError(name, cause)
       }
+      signal.throwIfAborted()
+      if (enabled) admitted.set(name, definition)
     }
     let closed = false
     return Object.freeze({
@@ -300,35 +294,6 @@ export class ToolsService extends Service {
         return visible
       },
     })
-  }
-
-  /**
-   * Whether the step's model can call tools at all.
-   *
-   * Capability comes from the resolved provider adapter rather than from the
-   * step, because one registry serves every route. An absent `llm` service, an
-   * unknown model, or a failed lookup all answer `true`: this gate may only
-   * remove tools a deployment deliberately withheld, so an inconclusive answer
-   * has to preserve today's behavior instead of silently stripping a step.
-   * @param context - the step's captured model selection and cancellation.
-   * @returns false only when the model is known to withhold tool calls.
-   */
-  private async modelAdmitsTools(context: ToolActivationContext): Promise<boolean> {
-    const llm = this.ctx.get('llm')
-    if (llm === undefined) return true
-    try {
-      const info = await llm.resolveModelInfo(
-        context.modelSelection.provider, context.modelSelection.model, context.signal,
-      )
-      return info.supportsTools !== false
-    } catch (cause: unknown) {
-      context.signal.throwIfAborted()
-      this.ctx.logger.warn(
-        `tools: could not resolve tool capability of "${context.modelSelection.provider}/${context.modelSelection.model}":`
-          + ` ${cause instanceof Error ? cause.message : String(cause)}`,
-      )
-      return true
-    }
   }
 
   /**
