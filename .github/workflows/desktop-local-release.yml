@@ -1,4 +1,4 @@
-# Build unsigned desktop installers for this fork's own release tags.
+﻿# Build unsigned desktop installers for this fork's own release tags.
 #
 # Dev-stage work stays in the branch; a `local-v*` tag is the signal that a
 # version is settled and worth packaging. The artifacts are attached to a GitHub
@@ -46,8 +46,10 @@ jobs:
         with:
           node-version: '24'
 
-      - name: Enable pnpm
-        run: corepack enable
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.28.5
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -89,8 +91,10 @@ jobs:
         with:
           node-version: '24'
 
-      - name: Enable pnpm
-        run: corepack enable
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.28.5
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
