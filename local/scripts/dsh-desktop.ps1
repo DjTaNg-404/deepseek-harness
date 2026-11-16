@@ -38,6 +38,13 @@ function Invoke-Pnpm([string[]]$arguments) {
 
 Write-Step "repo: $repo"
 
+# The desktop dev launcher defaults to a private DSH_HOME under .desktop-build.
+# Point it at the real home so sessions, the profile, installed plugins and model
+# routes match the packaged app instead of starting from onboarding.
+if (-not $env:DSH_HOME) { $env:DSH_HOME = Join-Path $env:USERPROFILE '.dsh' }
+if (-not $env:DSH_DESKTOP_OPEN_DEVTOOLS) { $env:DSH_DESKTOP_OPEN_DEVTOOLS = '0' }
+Write-Step "DSH_HOME: $env:DSH_HOME"
+
 if (-not $NoPull) {
   try {
     $pulled = & git pull --ff-only --no-rebase 2>&1
