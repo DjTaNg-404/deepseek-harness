@@ -1,0 +1,127 @@
+# Build unsigned desktop installers for this fork's own release tags.
+#
+# Dev-stage work stays in the branch; a `local-v*` tag is the signal that a
+# version is settled and worth packaging. The artifacts are attached to a GitHub
+# Release so other machines can install without building anything.
+name: Desktop local release
+
+on:
+  push:
+    tags: ['local-v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: desktop-local-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    name: Windows x64 (unsigned)
+    runs-on: windows-latest
+    timeout-minutes: 180
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: |
+          foreach ($path in @(
+            'C:\hostedtoolcache\windows\Java',
+            'C:\hostedtoolcache\windows\Ruby',
+            'C:\hostedtoolcache\windows\PyPy',
+            'C:\Program Files\Google\Chrome',
+            'C:\Program Files (x86)\Microsoft\Edge'
+          )) {
+            if (Test-Path $path) { Remove-Item $path -Recurse -Force -ErrorAction SilentlyContinue }
+          }
+          $drive = Get-PSDrive C
+          Write-Host ("free: {0:N1} GB" -f ($drive.Free / 1GB))
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Enable pnpm
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Write packaging environment
+        run: |
+          $origin = 'https://github.com/${{ github.repository }}/releases'
+          $releaseId = [guid]::NewGuid().ToString('N')
+          $lines = @(
+            'DSH_DESKTOP_APP_ID=com.deepseek.dsh',
+            'DSH_DESKTOP_AUTO_UPDATE_ENV=test',
+            "DOWNLOAD_TEST_ORIGIN=$origin",
+            "DOWNLOAD_TEST_RELEASE_ID=$releaseId",
+            "DSH_DESKTOP_MANDATORY_UPDATE_TEST_ORIGIN=$origin",
+            "DSH_DESKTOP_MANDATORY_UPDATE_PROD_ORIGIN=$origin",
+            'DSH_DESKTOP_MANDATORY_UPDATE_CONFIG={"allowedAuthOrigins":["https://github.com"]}'
+          )
+          Set-Content -Path apps/desktop/.env.windows -Value $lines -Encoding utf8
+          Get-Content apps/desktop/.env.windows
+
+      - name: Package desktop (unsigned)
+        run: pnpm run package:desktop:win:x64:unsigned
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          if-no-files-found: error
+          path: apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts/*.exe
+
+  macos:
+    name: macOS arm64 (unsigned)
+    runs-on: macos-14
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Enable pnpm
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Package desktop (unsigned)
+        run: pnpm run package:desktop:mac:arm64:unsigned
+
+      - name: Upload dmg
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-dmg
+          if-no-files-found: error
+          path: apps/desktop/.desktop-build/targets/mac-arm64/unsigned-artifacts/*.dmg
+
+  release:
+    name: Attach to release
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [windows, macos]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Download installers
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            dist/*.exe
+            dist/*.dmg
